@@ -1,0 +1,2057 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>PineFX ラボ</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="PineFX">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+JP:wght@400;500;600&display=swap">
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+/* Layout: phone = header / chart (flex) / sliding panel / bottom tab bar; desktop = chart | 420px side panel */
+:root{
+  --bg:#EDF0F3; --surface:#FFFFFF; --raised:#F5F7F9; --ink:#141D27; --muted:#5B6874; --faint:#8A95A0;
+  --line:#D7DDE3; --grid:#EEF1F4;
+  --accent:#2B4C9B; --accent-ink:#FFFFFF; --accent-soft:#E2E8F6;
+  --up:#0F8A6F; --down:#D2452C; --warn:#9A6512; --warn-soft:#FBF1DE; --err:#B8352A; --err-soft:#FBE8E5; --ok:#0F8A6F;
+  --font-ui:'IBM Plex Sans JP','Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic',system-ui,sans-serif;
+  --font-mono:'IBM Plex Mono',ui-monospace,'SFMono-Regular',Menlo,monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0D1217; --surface:#131A21; --raised:#19222B; --ink:#E1E6EB; --muted:#8C99A5; --faint:#5F6C78;
+  --line:#25303B; --grid:#1A222A;
+  --accent:#88A4EE; --accent-ink:#0D1217; --accent-soft:#1D2944;
+  --up:#2DB394; --down:#EE6A4F; --warn:#E3AE57; --warn-soft:#33281A; --err:#F27F72; --err-soft:#3A1E1B; --ok:#2DB394;
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#0D1217; --surface:#131A21; --raised:#19222B; --ink:#E1E6EB; --muted:#8C99A5; --faint:#5F6C78;
+  --line:#25303B; --grid:#1A222A;
+  --accent:#88A4EE; --accent-ink:#0D1217; --accent-soft:#1D2944;
+  --up:#2DB394; --down:#EE6A4F; --warn:#E3AE57; --warn-soft:#33281A; --err:#F27F72; --err-soft:#3A1E1B; --ok:#2DB394;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-ui);font-size:14px;overflow:hidden;
+  padding-left:max(10px,env(safe-area-inset-left,0px));padding-right:max(10px,env(safe-area-inset-right,0px));box-sizing:border-box}
+*{box-sizing:border-box}
+button,select,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+
+.app{height:100%;display:grid;grid-template-rows:auto minmax(0,1fr) auto auto;gap:8px;padding-block:6px 0}
+/* header */
+.top{display:grid;grid-template-columns:auto 1fr auto;grid-template-areas:"brand pair quote" "tfs tfs tfs";align-items:center;gap:6px 10px}
+.brand{grid-area:brand;font-weight:600;letter-spacing:.02em;font-size:15px;display:flex;align-items:center;gap:6px}
+.brand svg{width:18px;height:18px;color:var(--accent)}
+.brand b{color:var(--accent);font-weight:600}
+.pair{grid-area:pair;justify-self:start;position:relative}
+.pair select{appearance:none;-webkit-appearance:none;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:5px 26px 5px 10px;font-weight:600;font-size:15px;max-width:46vw}
+.pair::after{content:"";position:absolute;right:10px;top:50%;width:6px;height:6px;border-right:1.5px solid var(--muted);border-bottom:1.5px solid var(--muted);transform:translateY(-70%) rotate(45deg);pointer-events:none}
+.quote{grid-area:quote;text-align:right;line-height:1.15}
+.quote .px{font-family:var(--font-mono);font-weight:600;font-size:16px;font-variant-numeric:tabular-nums}
+.quote .chg{font-family:var(--font-mono);font-size:11px;font-variant-numeric:tabular-nums}
+.up{color:var(--up)} .down{color:var(--down)}
+.tfs{grid-area:tfs;display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.tfs::-webkit-scrollbar{display:none}
+.tf{flex:0 0 auto;border:1px solid transparent;background:transparent;border-radius:7px;padding:4px 10px;font-family:var(--font-mono);font-size:12.5px;color:var(--muted)}
+.tf[aria-selected="true"]{background:var(--surface);border-color:var(--line);color:var(--ink);font-weight:600}
+
+/* chart */
+.chart-wrap{min-height:0;position:relative;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.chart-host{position:absolute;inset:0;display:flex;flex-direction:column}
+.pane{position:relative;flex:0 0 auto;width:100%}
+.pane + .pane{border-top:1px solid var(--line)}
+.legend{position:absolute;left:8px;top:6px;right:72px;z-index:3;pointer-events:none;font-size:11px;line-height:1.45;font-family:var(--font-mono);font-variant-numeric:tabular-nums;color:var(--muted)}
+.lg-row{display:flex;flex-wrap:wrap;gap:0 8px;align-items:baseline}
+.lg-row b{color:var(--ink);font-family:var(--font-ui);font-weight:600;font-size:12px}
+.lg-name{color:var(--ink);font-family:var(--font-ui)}
+.lg-k{color:var(--faint)}
+.tag{display:inline-block;font-family:var(--font-ui);font-size:10px;padding:0 5px;border-radius:4px;background:var(--warn-soft);color:var(--warn);line-height:16px}
+.chart-empty{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);padding:24px;text-align:center}
+
+/* panel */
+.panel{min-height:0;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);display:flex;flex-direction:column;overflow:hidden;height:var(--panel-h,42vh);transition:height .2s ease}
+.app[data-panel="closed"] .panel{height:0;border-width:0}
+.app[data-panel="full"] .panel{height:68vh}
+.pbody{display:none;flex-direction:column;min-height:0;flex:1}
+.pbody.on{display:flex}
+.phead{display:flex;align-items:center;gap:8px;padding:10px 12px 8px;border-bottom:1px solid var(--line);flex:0 0 auto}
+.phead h2{font-size:14px;font-weight:600;margin:0;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pscroll{overflow:auto;-webkit-overflow-scrolling:touch;flex:1;min-height:0;padding:10px 12px 14px}
+.sizebtn{border:0;background:transparent;color:var(--muted);padding:4px;border-radius:6px;display:grid;place-items:center}
+.sizebtn svg{width:18px;height:18px}
+
+.btn{border:1px solid var(--line);background:var(--raised);border-radius:8px;padding:6px 12px;font-size:13px;font-weight:500;white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.danger{color:var(--err)}
+.btn.danger.armed{background:var(--err);color:var(--surface);border-color:var(--err)}
+.btn.sm{padding:4px 9px;font-size:12px}
+.btn svg{width:14px;height:14px}
+
+/* tabbar */
+.tabbar{display:grid;grid-template-columns:repeat(5,1fr);padding-bottom:max(4px,env(safe-area-inset-bottom,0px))}
+.tab{border:0;background:transparent;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0 4px;color:var(--faint);font-size:10.5px;position:relative}
+.tab svg{width:21px;height:21px}
+.tab[aria-selected="true"]{color:var(--accent)}
+.tab .dot{position:absolute;top:4px;right:calc(50% - 16px);width:7px;height:7px;border-radius:50%;background:var(--err)}
+
+/* indicator list */
+.slist{display:flex;flex-direction:column;gap:2px}
+.srow{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px;padding:8px 6px;border-radius:8px}
+.srow.sel{background:var(--accent-soft)}
+.sw{width:40px;height:24px;border-radius:12px;border:0;background:var(--line);position:relative;flex:0 0 auto;transition:background .15s}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--surface);box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .15s}
+.sw[aria-checked="true"]{background:var(--accent)}
+.sw[aria-checked="true"]::after{transform:translateX(16px)}
+.sname{border:0;background:transparent;text-align:left;padding:0;min-width:0}
+.sname .n{font-weight:500;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sname .m{font-size:11.5px;color:var(--muted)}
+.badge{font-size:10.5px;padding:1px 6px;border-radius:5px;background:var(--err-soft);color:var(--err);font-weight:500}
+.sect{font-size:11px;letter-spacing:.06em;color:var(--faint);margin:16px 6px 6px;text-transform:uppercase}
+.chips{display:flex;flex-wrap:wrap;gap:6px;padding:0 6px}
+.chip{border:1px dashed var(--line);background:transparent;border-radius:999px;padding:5px 11px;font-size:12.5px;color:var(--muted)}
+
+/* editor */
+.edwrap{flex:1;min-height:0;display:flex;flex-direction:column}
+.msg{margin:8px 12px 0;padding:7px 10px;border-radius:7px;font-size:12.5px;line-height:1.5}
+.msg.err{background:var(--err-soft);color:var(--err)}
+.msg.warn{background:var(--warn-soft);color:var(--warn)}
+.msg.ok{background:var(--raised);color:var(--muted)}
+.msg button{border:0;background:none;color:inherit;text-decoration:underline;padding:0;font-size:inherit}
+.keybar{display:flex;gap:5px;overflow-x:auto;padding:8px 12px;scrollbar-width:none;flex:0 0 auto}
+.keybar::-webkit-scrollbar{display:none}
+.key{flex:0 0 auto;min-width:36px;height:32px;border:1px solid var(--line);background:var(--raised);border-radius:7px;font-family:var(--font-mono);font-size:14px;padding:0 9px}
+.editor{flex:1;min-height:160px;display:flex;margin:0 12px 12px;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--raised)}
+.gutter{margin:0;padding:10px 6px 10px 8px;text-align:right;color:var(--faint);font-family:var(--font-mono);font-size:13px;line-height:1.55;user-select:none;overflow:hidden;min-width:34px;border-right:1px solid var(--line)}
+.gutter .e{color:var(--err);font-weight:600}
+#code{flex:1;min-width:0;border:0;outline:0;resize:none;background:transparent;padding:10px;font-family:var(--font-mono);font-size:13px;line-height:1.55;white-space:pre;overflow:auto;tab-size:4;-webkit-text-size-adjust:100%}
+@media (pointer:coarse){#code{font-size:16px} .gutter{font-size:16px}}
+details.ref{margin:0 12px 12px;font-size:12.5px;color:var(--muted)}
+details.ref summary{cursor:pointer;padding:4px 0}
+.ref dl{margin:6px 0 0;display:grid;grid-template-columns:auto 1fr;gap:4px 10px}
+.ref dt{color:var(--ink);font-weight:500}
+.ref dd{margin:0;font-family:var(--font-mono);font-size:11.5px;line-height:1.6;word-break:break-word}
+
+/* inputs */
+.form{display:flex;flex-direction:column;gap:2px}
+.frow{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;padding:9px 2px;border-bottom:1px solid var(--grid)}
+.frow label{min-width:0}
+.frow .def{display:block;font-size:11px;color:var(--faint);font-family:var(--font-mono)}
+.num{display:flex;align-items:center;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--raised)}
+.num button{border:0;background:transparent;width:34px;height:34px;font-size:17px;color:var(--muted)}
+.num input{width:74px;border:0;background:transparent;text-align:center;font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:16px;height:34px;outline:0}
+.dd{border:1px solid var(--line);border-radius:8px;background:var(--raised);padding:6px 10px;font-size:16px;max-width:52vw}
+.txt{border:1px solid var(--line);border-radius:8px;background:var(--raised);padding:6px 10px;font-size:16px;width:150px}
+.empty{color:var(--muted);text-align:center;padding:28px 12px;line-height:1.7}
+.empty b{color:var(--ink);font-weight:500}
+.empty code{font-family:var(--font-mono);background:var(--raised);padding:1px 5px;border-radius:4px;font-size:12px}
+
+/* results */
+.rhead{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;color:var(--muted);font-size:12.5px}
+.rhead .sp{display:flex;align-items:center;gap:6px;margin-left:auto}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.stat{background:var(--surface);padding:9px 10px}
+.stat .k{font-size:11px;color:var(--muted)}
+.stat .v{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:15px;font-weight:600;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stat .s{font-family:var(--font-mono);font-size:11px;color:var(--faint)}
+.eqbox{margin:12px 0 4px;position:relative}
+.eqbox canvas{width:100%;height:120px;display:block}
+.eqcap{display:flex;justify-content:space-between;font-size:11px;color:var(--faint);font-family:var(--font-mono)}
+.trades{margin-top:12px;display:flex;flex-direction:column}
+.tr{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:2px 10px;padding:8px 2px;border-bottom:1px solid var(--grid);font-size:12px}
+.tr .no{font-family:var(--font-mono);color:var(--faint);grid-row:span 2;align-self:center;min-width:28px}
+.tr .when{color:var(--muted);font-family:var(--font-mono);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tr .pl{text-align:right;font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-weight:600}
+.tr .px2{font-family:var(--font-mono);font-variant-numeric:tabular-nums;color:var(--ink)}
+.tr .pp{text-align:right;font-family:var(--font-mono);font-size:11px;color:var(--muted)}
+.dir{display:inline-block;font-size:10.5px;padding:0 6px;border-radius:4px;margin-right:6px;font-family:var(--font-ui);font-weight:500}
+.dir.l{background:color-mix(in srgb,var(--up) 16%,transparent);color:var(--up)}
+.dir.s{background:color-mix(in srgb,var(--down) 16%,transparent);color:var(--down)}
+.why{font-size:10.5px;color:var(--faint);margin-left:6px}
+
+/* data */
+.dlist{display:flex;flex-direction:column;gap:6px}
+.drow{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px;border:1px solid var(--line);border-radius:9px;background:var(--surface);text-align:left}
+.drow.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.radio{width:18px;height:18px;border-radius:50%;border:2px solid var(--line)}
+.drow.on .radio{border-color:var(--accent);background:radial-gradient(circle,var(--accent) 0 4px,transparent 5px)}
+.drow .n{font-weight:600}
+.drow .m{font-size:11.5px;color:var(--muted);font-family:var(--font-mono)}
+.importbox{margin-top:14px;padding:12px;border:1px dashed var(--line);border-radius:9px;display:flex;flex-direction:column;gap:10px}
+.importbox .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.help{font-size:12.5px;color:var(--muted);line-height:1.7}
+.help h3{font-size:13px;color:var(--ink);margin:16px 0 4px;font-weight:600}
+.help p{margin:0 0 6px}
+.help code{font-family:var(--font-mono);font-size:11.5px;background:var(--raised);padding:1px 5px;border-radius:4px;word-break:break-all}
+.toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--surface);padding:8px 14px;border-radius:8px;font-size:13px;z-index:50;max-width:calc(100% - 40px);text-align:center}
+
+@media (min-width:960px){
+  body{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  .app{grid-template-columns:minmax(0,1fr) 420px;grid-template-rows:auto minmax(0,1fr) auto;padding-block:12px}
+  .top{grid-column:1/-1;grid-template-columns:auto auto 1fr auto;grid-template-areas:"brand pair tfs quote"}
+  .chart-wrap{grid-column:1;grid-row:2/4}
+  .panel,.app[data-panel] .panel{grid-column:2;grid-row:2;height:auto;border-width:1px}
+  .tabbar{grid-column:2;grid-row:3;padding-bottom:0}
+  .sizebtn{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="app" id="app" data-panel="half">
+  <header class="top">
+    <div class="brand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 6 10h3l-4 6h4l-3 5h12l-3-5h4l-4-6h3z"/></svg>Pine<b>FX</b></div>
+    <label class="pair"><select id="pairSel" aria-label="通貨ペア"></select></label>
+    <div class="quote" id="quote"></div>
+    <div class="tfs" id="tfs" role="tablist" aria-label="時間足"></div>
+  </header>
+
+  <main class="chart-wrap" id="chartWrap"><div id="chartHost" class="chart-host"></div></main>
+
+  <section class="panel" id="panel">
+    <!-- indicators -->
+    <div class="pbody" id="pb-ind">
+      <div class="phead"><h2>インジケーターと戦略</h2><button class="sizebtn" data-size aria-label="パネルの大きさを切り替え"></button></div>
+      <div class="pscroll">
+        <div class="slist" id="slist"></div>
+        <div class="sect">追加する</div>
+        <div class="chips" id="chips"></div>
+      </div>
+    </div>
+    <!-- editor -->
+    <div class="pbody" id="pb-ed">
+      <div class="phead"><h2 id="edTitle">エディタ</h2>
+        <button class="btn danger sm" id="delBtn">削除</button>
+        <button class="btn primary" id="runBtn"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4v16l13-8z"/></svg>実行</button>
+        <button class="sizebtn" data-size aria-label="パネルの大きさを切り替え"></button>
+      </div>
+      <div class="edwrap">
+        <div id="edMsg"></div>
+        <div class="keybar" id="keybar"></div>
+        <div class="editor"><pre class="gutter" id="gutter" aria-hidden="true">1</pre><textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" wrap="off" aria-label="Pine Script"></textarea></div>
+        <details class="ref" id="ref"><summary>対応している関数・構文</summary><dl id="refList"></dl></details>
+      </div>
+    </div>
+    <!-- inputs -->
+    <div class="pbody" id="pb-set">
+      <div class="phead"><h2 id="setTitle">設定</h2><button class="btn sm" id="resetInputs">初期値に戻す</button><button class="sizebtn" data-size aria-label="パネルの大きさを切り替え"></button></div>
+      <div class="pscroll"><div class="form" id="form"></div></div>
+    </div>
+    <!-- results -->
+    <div class="pbody" id="pb-res">
+      <div class="phead"><h2 id="resTitle">バックテスト</h2><button class="sizebtn" data-size aria-label="パネルの大きさを切り替え"></button></div>
+      <div class="pscroll" id="resBody"></div>
+    </div>
+    <!-- data -->
+    <div class="pbody" id="pb-data">
+      <div class="phead"><h2>データ</h2><button class="sizebtn" data-size aria-label="パネルの大きさを切り替え"></button></div>
+      <div class="pscroll">
+        <div class="dlist" id="dlist"></div>
+        <div class="importbox">
+          <div class="row">
+            <label class="btn primary" for="csvFile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 16V4m0 0-4 4m4-4 4 4M4 16v4h16v-4"/></svg>CSVを読み込む</label>
+            <input type="file" id="csvFile" accept=".csv,.txt,text/csv,text/plain" hidden>
+            <select class="dd" id="tzSel" aria-label="CSVの時刻のタイムゾーン">
+              <option value="0">時刻はUTC</option>
+              <option value="9">時刻は日本時間</option>
+              <option value="2">MT4/MT5（UTC+2）</option>
+              <option value="3">MT4/MT5（UTC+3）</option>
+            </select>
+          </div>
+          <div class="help">ファイル名に通貨ペア名（例：<code>USDJPY_H1.csv</code>）があれば自動で名前が付きます。</div>
+        </div>
+        <div class="help">
+          <h3>対応しているCSV</h3>
+          <p>日時の後に「始値・高値・安値・終値（・出来高）」が並んだ形式です。区切りはカンマ、タブ、セミコロンのどれでも読めます。</p>
+          <p><code>2026.10.15,09:00,149.120,149.250,149.080,149.210,1532</code><br><code>2026-10-15T00:00:00Z,149.12,149.25,149.08,149.21</code><br><code>1760486400,149.12,149.25,149.08,149.21</code></p>
+          <h3>MT4 / MT5 から書き出す</h3>
+          <p>MT4：ツール → ヒストリーセンター → 通貨ペアと時間足を選んで「エクスポート」。<br>MT5：表示 → 銘柄 → 「チャートバー」タブ → 期間を指定して「バーをエクスポート」。</p>
+          <h3>iPhoneのホーム画面に置く</h3>
+          <p>Safariでこのページを開き、共有ボタン → 「ホーム画面に追加」を選ぶと、アプリのようにアイコンから起動できます。</p>
+          <h3>保存について</h3>
+          <p>スクリプト・設定・読み込んだデータは、この端末のブラウザ内に保存されます。他の端末とは共有されません。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <nav class="tabbar" id="tabbar" role="tablist" aria-label="パネル">
+    <button class="tab" data-tab="ind" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M3 17l5-6 4 3 6-8 3 3"/><path d="M3 21h18"/></svg>インジ</button>
+    <button class="tab" data-tab="ed" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M13.5 4l-3 16"/></svg>エディタ</button>
+    <button class="tab" data-tab="set" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>設定</button>
+    <button class="tab" data-tab="res" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M5 20V10M10 20V4M15 20v-7M20 20v-11"/></svg>結果</button>
+    <button class="tab" data-tab="data" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/></svg>データ</button>
+  </nav>
+</div>
+
+<script>
+/*ENGINE-START*/
+const PINE = (() => {
+  class PineError extends Error { constructor(msg, line) { super(msg); this.line = line; } }
+
+  const KEYWORDS = new Set(['and','or','not','if','else','for','to','by','var','varip','true','false','while','break','continue','switch','import','export','method','type']);
+  const TYPE_WORDS = new Set(['int','float','bool','color','string','series','simple','const','line','label','box','table']);
+
+  // ---------- colors ----------
+  const C = (r, g, b, a = 1) => ({ r, g, b, a, __c: 1 });
+  function hex(h) {
+    h = h.replace('#', '');
+    const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+    const a = h.length === 8 ? parseInt(h.slice(6, 8), 16) / 255 : 1;
+    return C(r, g, b, a);
+  }
+  const isColor = v => !!v && v.__c === 1;
+  const css = v => isColor(v) ? `rgba(${Math.round(v.r)},${Math.round(v.g)},${Math.round(v.b)},${+v.a.toFixed(3)})` : null;
+
+  const CONST = {};
+  const COLORS = { red:'#F23645', green:'#089981', blue:'#2962FF', orange:'#FF9800', yellow:'#FDD835', purple:'#9C27B0', teal:'#00897B', aqua:'#00BCD4', lime:'#00E676', maroon:'#880E4F', navy:'#311B92', fuchsia:'#E040FB', silver:'#B2B5BE', gray:'#787B86', olive:'#808000', white:'#FFFFFF', black:'#363A45' };
+  for (const k in COLORS) CONST['color.' + k] = hex(COLORS[k]);
+  Object.assign(CONST, {
+    'plot.style_line':'line','plot.style_linebr':'line','plot.style_stepline':'step','plot.style_stepline_diamond':'step','plot.style_steplinebr':'step',
+    'plot.style_histogram':'hist','plot.style_columns':'columns','plot.style_circles':'circles','plot.style_cross':'circles','plot.style_area':'area','plot.style_areabr':'area',
+    'location.abovebar':'aboveBar','location.belowbar':'belowBar','location.top':'aboveBar','location.bottom':'belowBar','location.absolute':'inBar',
+    'shape.triangleup':'arrowUp','shape.arrowup':'arrowUp','shape.labelup':'arrowUp','shape.triangledown':'arrowDown','shape.arrowdown':'arrowDown','shape.labeldown':'arrowDown',
+    'shape.circle':'circle','shape.xcross':'circle','shape.cross':'circle','shape.diamond':'circle','shape.flag':'square','shape.square':'square',
+    'size.tiny':0.5,'size.small':0.8,'size.normal':1,'size.large':1.5,'size.huge':2,'size.auto':1,
+    'hline.style_solid':0,'hline.style_dotted':1,'hline.style_dashed':2,
+    'strategy.long':1,'strategy.short':-1,'strategy.fixed':'fixed','strategy.cash':'cash','strategy.percent_of_equity':'percent',
+    'strategy.commission.percent':'percent','strategy.commission.cash_per_order':'cash','strategy.commission.cash_per_contract':'cash',
+    'display.all':'all','display.none':'none','display.pane':'all','display.data_window':'all','display.status_line':'all','display.price_scale':'all',
+    'format.price':'price','format.percent':'percent','format.volume':'volume','format.mintick':'mintick','format.inherit':'price',
+    'math.pi':Math.PI,'math.e':Math.E,'math.phi':1.618033988749895,
+    'dayofweek.sunday':1,'dayofweek.monday':2,'dayofweek.tuesday':3,'dayofweek.wednesday':4,'dayofweek.thursday':5,'dayofweek.friday':6,'dayofweek.saturday':7,
+    'scale.right':'right','scale.left':'left','scale.none':'none','extend.none':'none','extend.both':'both','extend.left':'left','extend.right':'right',
+    'xloc.bar_index':'bi','xloc.bar_time':'bt','yloc.price':'p','yloc.abovebar':'a','yloc.belowbar':'b',
+    'barmerge.gaps_off':0,'barmerge.gaps_on':1,'barmerge.lookahead_off':0,'barmerge.lookahead_on':1,
+    'na': NaN
+  });
+
+  // ---------- lexer ----------
+  function lexLine(src, line) {
+    const toks = []; let i = 0; const n = src.length;
+    while (i < n) {
+      const ch = src[i];
+      if (ch === ' ' || ch === '\t' || ch === '\r') { i++; continue; }
+      if (ch === '/' && src[i + 1] === '/') break;
+      if (/[0-9]/.test(ch) || (ch === '.' && /[0-9]/.test(src[i + 1] || ''))) {
+        const m = /^(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?/.exec(src.slice(i));
+        toks.push({ t: 'num', v: parseFloat(m[0]), line }); i += m[0].length; continue;
+      }
+      if (/[A-Za-z_]/.test(ch)) {
+        const m = /^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*/.exec(src.slice(i));
+        const w = m[0];
+        toks.push({ t: KEYWORDS.has(w) ? 'kw' : 'id', v: w, line }); i += w.length; continue;
+      }
+      if (ch === '"' || ch === "'") {
+        let j = i + 1, s = '';
+        while (j < n && src[j] !== ch) {
+          if (src[j] === '\\' && j + 1 < n) { const e = src[j + 1]; s += e === 'n' ? '\n' : e === 't' ? '\t' : e; j += 2; }
+          else s += src[j++];
+        }
+        if (j >= n) throw new PineError('文字列の引用符が閉じていません', line);
+        toks.push({ t: 'str', v: s, line }); i = j + 1; continue;
+      }
+      if (ch === '#') {
+        const m = /^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?(?![0-9A-Fa-f])/.exec(src.slice(i));
+        if (!m) throw new PineError('色の指定が不正です（#RRGGBB の形式で書いてください）', line);
+        toks.push({ t: 'color', v: hex(m[0]), line }); i += m[0].length; continue;
+      }
+      const two = src.substr(i, 2);
+      if ([':=','+=','-=','*=','/=','%=','=>','==','!=','<=','>='].includes(two)) { toks.push({ t: 'op', v: two, line }); i += 2; continue; }
+      if ('+-*/%<>=?:,()[]'.includes(ch)) { toks.push({ t: 'op', v: ch, line }); i++; continue; }
+      throw new PineError(`使えない文字「${ch}」があります`, line);
+    }
+    return toks;
+  }
+
+  const CONT_OPS = new Set([',','+','-','*','/','%','?',':','==','!=','<','>','<=','>=','=',':=','(','[','+=','-=','*=','/=']);
+  function logicalLines(code) {
+    const phys = code.replace(/\t/g, '    ').split('\n');
+    const out = []; let cur = null, depth = 0;
+    for (let k = 0; k < phys.length; k++) {
+      const raw = phys[k];
+      const toks = lexLine(raw, k + 1);
+      if (!toks.length) continue;
+      const indent = raw.match(/^ */)[0].length;
+      let cont = false;
+      if (cur) {
+        const last = cur.tokens[cur.tokens.length - 1];
+        const endsCont = (last.t === 'op' && CONT_OPS.has(last.v)) || (last.t === 'kw' && (last.v === 'and' || last.v === 'or' || last.v === 'not'));
+        cont = depth > 0 || endsCont || (indent > cur.indent && indent % 4 !== 0);
+      }
+      if (cont) cur.tokens.push(...toks);
+      else { cur = { indent, tokens: toks, line: k + 1 }; out.push(cur); }
+      for (const t of toks) if (t.t === 'op') { if (t.v === '(' || t.v === '[') depth++; else if (t.v === ')' || t.v === ']') depth = Math.max(0, depth - 1); }
+    }
+    return out;
+  }
+
+  // ---------- parser ----------
+  let NID = 0;
+  const mk = (type, line, props) => Object.assign({ type, id: ++NID, line }, props);
+
+  class TS {
+    constructor(toks, line) { this.toks = toks; this.i = 0; this.line = line; }
+    peek(o = 0) { return this.toks[this.i + o]; }
+    next() { return this.toks[this.i++]; }
+    isOp(v, o = 0) { const t = this.peek(o); return !!t && t.t === 'op' && t.v === v; }
+    isKw(v, o = 0) { const t = this.peek(o); return !!t && t.t === 'kw' && t.v === v; }
+    ln() { const t = this.peek() || this.toks[this.toks.length - 1]; return t ? t.line : this.line; }
+    expectOp(v) { if (!this.isOp(v)) throw new PineError(`「${v}」が必要です`, this.ln()); return this.next(); }
+    expectId() { const t = this.peek(); if (!t || t.t !== 'id') throw new PineError('変数名が必要です', this.ln()); return this.next().v; }
+    end() { return this.i >= this.toks.length; }
+    expectEnd() { if (!this.end()) { const t = this.peek(); throw new PineError(`「${t.v}」の位置で文が終わっていません`, t.line); } }
+  }
+
+  function parseExpr(ts) { return parseTernary(ts); }
+  function parseTernary(ts) {
+    const c = parseOr(ts);
+    if (ts.isOp('?')) { const line = ts.next().line; const a = parseTernary(ts); ts.expectOp(':'); const b = parseTernary(ts); return mk('Tern', line, { c, a, b }); }
+    return c;
+  }
+  function bin(next, ops, isKw) {
+    return ts => {
+      let l = next(ts);
+      for (;;) {
+        const t = ts.peek();
+        if (t && ((isKw && t.t === 'kw') || (!isKw && t.t === 'op')) && ops.includes(t.v)) { ts.next(); const r = next(ts); l = mk('Bin', t.line, { op: t.v, l, r }); }
+        else return l;
+      }
+    };
+  }
+  function parseUnary(ts) {
+    const t = ts.peek();
+    if (t && ((t.t === 'op' && (t.v === '-' || t.v === '+')) || (t.t === 'kw' && t.v === 'not'))) { ts.next(); return mk('Un', t.line, { op: t.v, x: parseUnary(ts) }); }
+    return parsePostfix(ts);
+  }
+  const parseMul = bin(parseUnary, ['*', '/', '%']);
+  const parseAdd = bin(parseMul, ['+', '-']);
+  const parseRel = bin(parseAdd, ['<', '>', '<=', '>=']);
+  const parseEq = bin(parseRel, ['==', '!=']);
+  const parseAnd = bin(parseEq, ['and'], true);
+  const parseOr = bin(parseAnd, ['or'], true);
+  function parsePostfix(ts) {
+    let e = parsePrimary(ts);
+    while (ts.isOp('[')) { const line = ts.next().line; const idx = parseExpr(ts); ts.expectOp(']'); e = mk('Idx', line, { target: e, idx }); }
+    return e;
+  }
+  function parseArgs(ts) {
+    const args = [], named = {};
+    ts.expectOp('(');
+    while (!ts.isOp(')')) {
+      if (ts.end()) throw new PineError('「)」が閉じていません', ts.ln());
+      const t = ts.peek();
+      if (t.t === 'id' && ts.isOp('=', 1)) { ts.next(); ts.next(); named[t.v] = parseExpr(ts); }
+      else args.push(parseExpr(ts));
+      if (ts.isOp(',')) ts.next(); else if (!ts.isOp(')')) throw new PineError('引数の区切りには「,」を使ってください', ts.ln());
+    }
+    ts.next();
+    return { args, named };
+  }
+  function parsePrimary(ts) {
+    const t = ts.peek();
+    if (!t) throw new PineError('式が途中で終わっています', ts.ln());
+    if (t.t === 'num') { ts.next(); return mk('Lit', t.line, { v: t.v }); }
+    if (t.t === 'str') { ts.next(); return mk('Lit', t.line, { v: t.v }); }
+    if (t.t === 'color') { ts.next(); return mk('Lit', t.line, { v: t.v }); }
+    if (t.t === 'kw' && (t.v === 'true' || t.v === 'false')) { ts.next(); return mk('Lit', t.line, { v: t.v === 'true' }); }
+    if (t.t === 'id') {
+      ts.next();
+      if (ts.isOp('(')) { const { args, named } = parseArgs(ts); return mk('Call', t.line, { name: t.v, args, named }); }
+      return mk('Id', t.line, { name: t.v });
+    }
+    if (t.t === 'op' && t.v === '(') { ts.next(); const e = parseExpr(ts); ts.expectOp(')'); return e; }
+    if (t.t === 'op' && t.v === '[') {
+      ts.next(); const items = [];
+      while (!ts.isOp(']')) { items.push(parseExpr(ts)); if (ts.isOp(',')) ts.next(); else if (!ts.isOp(']')) throw new PineError('「]」が必要です', ts.ln()); }
+      ts.next(); return mk('Tup', t.line, { items });
+    }
+    if (t.t === 'kw' && (t.v === 'switch')) throw new PineError('switch 文にはまだ対応していません（if / else で書き換えてください）', t.line);
+    throw new PineError(`「${t.v}」はここに書けません`, t.line);
+  }
+
+  class Parser {
+    constructor(lines) { this.L = lines; this.p = 0; }
+    program() { const b = this.block(0); if (this.p < this.L.length) throw new PineError('インデントが不正です', this.L[this.p].line); return b; }
+    block(indent) {
+      const out = [];
+      while (this.p < this.L.length) {
+        const L = this.L[this.p];
+        if (L.indent < indent) break;
+        if (L.indent > indent) throw new PineError('予期しないインデントです（ブロックは4スペース単位で揃えてください）', L.line);
+        out.push(this.stmt());
+      }
+      return out;
+    }
+    child(L) {
+      const nx = this.L[this.p];
+      if (!nx || nx.indent <= L.indent) throw new PineError('ブロックの中身がありません（次の行を4スペース下げて書いてください）', L.line);
+      return this.block(nx.indent);
+    }
+    stmt() {
+      const L = this.L[this.p++];
+      const toks = L.tokens, ts = new TS(toks, L.line), t0 = toks[0];
+      if (t0.t === 'kw' && t0.v === 'if') {
+        ts.next(); const cond = parseExpr(ts); ts.expectEnd();
+        const then = this.child(L); let els = null;
+        const nx = this.L[this.p];
+        if (nx && nx.indent === L.indent && nx.tokens[0].t === 'kw' && nx.tokens[0].v === 'else') {
+          if (nx.tokens[1] && nx.tokens[1].t === 'kw' && nx.tokens[1].v === 'if') { nx.tokens = nx.tokens.slice(1); els = [this.stmt()]; }
+          else { this.p++; if (nx.tokens.length > 1) throw new PineError('else の後ろには何も書かず、改行してください', nx.line); els = this.child(nx); }
+        }
+        return mk('If', L.line, { cond, then, els });
+      }
+      if (t0.t === 'kw' && t0.v === 'else') throw new PineError('対応する if がない else です', L.line);
+      if (t0.t === 'kw' && t0.v === 'for') {
+        ts.next(); const v = ts.expectId(); ts.expectOp('='); const from = parseExpr(ts);
+        if (!ts.isKw('to')) throw new PineError('for 文には「to」が必要です（for i = 0 to 10）', L.line);
+        ts.next(); const to = parseExpr(ts); let step = null;
+        if (ts.isKw('by')) { ts.next(); step = parseExpr(ts); }
+        ts.expectEnd();
+        return mk('For', L.line, { v, from, to, step, body: this.child(L) });
+      }
+      if (t0.t === 'kw' && t0.v === 'while') { ts.next(); const cond = parseExpr(ts); ts.expectEnd(); return mk('While', L.line, { cond, body: this.child(L) }); }
+      if (t0.t === 'kw' && (t0.v === 'break' || t0.v === 'continue')) return mk(t0.v === 'break' ? 'Break' : 'Cont', L.line, {});
+      if (t0.t === 'kw' && ['import','export','method','type'].includes(t0.v)) throw new PineError(`「${t0.v}」にはまだ対応していません`, L.line);
+      // function definition
+      if (t0.t === 'id' && toks[1] && toks[1].t === 'op' && toks[1].v === '(') {
+        let d = 0, k = 1;
+        for (; k < toks.length; k++) { const t = toks[k]; if (t.t === 'op' && t.v === '(') d++; else if (t.t === 'op' && t.v === ')') { d--; if (!d) break; } }
+        const arrow = toks[k + 1];
+        if (arrow && arrow.t === 'op' && arrow.v === '=>') {
+          const params = []; let grp = [];
+          const flush = () => {
+            if (!grp.length) return;
+            const eq = grp.findIndex(t => t.t === 'op' && t.v === '=');
+            const head = eq >= 0 ? grp.slice(0, eq) : grp;
+            const ids = head.filter(t => t.t === 'id');
+            if (!ids.length) throw new PineError('引数名が不正です', L.line);
+            const p = { name: ids[ids.length - 1].v, def: null };
+            if (eq >= 0) { const s = new TS(grp.slice(eq + 1), L.line); p.def = parseExpr(s); }
+            params.push(p); grp = [];
+          };
+          let dd = 0;
+          for (let j = 2; j < k; j++) { const t = toks[j]; if (t.t === 'op' && (t.v === '(' || t.v === '[')) dd++; if (t.t === 'op' && (t.v === ')' || t.v === ']')) dd--; if (t.t === 'op' && t.v === ',' && dd === 0) flush(); else grp.push(t); }
+          flush();
+          const rest = toks.slice(k + 2);
+          if (rest.length) { const s = new TS(rest, L.line); const expr = parseExpr(s); s.expectEnd(); return mk('Fn', L.line, { name: t0.v, params, expr, body: null }); }
+          return mk('Fn', L.line, { name: t0.v, params, expr: null, body: this.child(L) });
+        }
+      }
+      // tuple declaration
+      if (t0.t === 'op' && t0.v === '[') {
+        const close = toks.findIndex(t => t.t === 'op' && t.v === ']');
+        const after = toks[close + 1];
+        if (close > 0 && after && after.t === 'op' && (after.v === '=' || after.v === ':=')) {
+          const names = toks.slice(1, close).filter(t => t.t === 'id').map(t => t.v);
+          const s = new TS(toks.slice(close + 2), L.line); const expr = parseExpr(s); s.expectEnd();
+          return mk('TDecl', L.line, { names, expr, reassign: after.v === ':=' });
+        }
+      }
+      // declaration / assignment
+      let k = 0, isVar = false;
+      if (toks[k].t === 'kw' && (toks[k].v === 'var' || toks[k].v === 'varip')) { isVar = true; k++; }
+      while (toks[k] && toks[k].t === 'id' && TYPE_WORDS.has(toks[k].v) && toks[k + 1] && toks[k + 1].t === 'id') k++;
+      const nameTok = toks[k], opTok = toks[k + 1];
+      if (nameTok && nameTok.t === 'id' && opTok && opTok.t === 'op') {
+        if (opTok.v === '=') {
+          const s = new TS(toks.slice(k + 2), L.line); if (s.end()) throw new PineError('「=」の右側に値がありません', L.line);
+          const expr = parseExpr(s); s.expectEnd();
+          return mk('Decl', L.line, { name: nameTok.v, isVar, expr });
+        }
+        if ([':=','+=','-=','*=','/=','%='].includes(opTok.v)) {
+          const s = new TS(toks.slice(k + 2), L.line); const expr = parseExpr(s); s.expectEnd();
+          return mk('Asg', L.line, { name: nameTok.v, op: opTok.v, expr });
+        }
+      }
+      if (isVar) throw new PineError('var の後には「変数名 = 値」を書いてください', L.line);
+      const expr = parseExpr(ts); ts.expectEnd();
+      return mk('Expr', L.line, { expr });
+    }
+  }
+
+  function parse(code) {
+    const lines = logicalLines(code);
+    return new Parser(lines).program();
+  }
+
+  // ---------- runtime ----------
+  const PRICE_NAMES = new Set(['open','high','low','close','volume','hl2','hlc3','ohlc4','hlcc4','time','time_close','bar_index','ta.tr','year','month','dayofmonth','dayofweek','hour','minute','weekofyear']);
+  const SOURCES = ['close','open','high','low','hl2','hlc3','ohlc4','hlcc4'];
+  const BRK = { brk: 1 }, CNT = { cnt: 1 };
+  const num = v => typeof v === 'number' ? v : v === true ? 1 : v === false ? 0 : NaN;
+  const truthy = v => v === true || (typeof v === 'number' && v === v && v !== 0);
+  const isNa = v => typeof v === 'number' && v !== v;
+
+  function run(ast, D, opts = {}) {
+    const N = D.n, inOv = opts.inputs || {}, spreadPx = (opts.spreadPips || 0) * D.pip;
+    const R = { meta: { title: '無題', overlay: false, kind: 'indicator', precision: null }, plots: [], plotMap: new Map(), shapes: [], hlines: [], bg: new Array(N), barColors: new Array(N), inputs: [], warnings: new Set(), broker: null, ms: 0 };
+    const G = new Map(), F = new Map(), NH = new Map(), TSm = new Map(), INC = new Map(), varList = [];
+    const LS = [];
+    let bar = 0, cp = '', depth = 0, steps = 0;
+    const t0 = (typeof performance !== 'undefined' ? performance : Date).now();
+    for (const s of ast) if (s.type === 'Fn') F.set(s.name, s);
+
+    const JST = 9 * 3600;
+    const jst = k => new Date((D.t[k] + JST) * 1000);
+    function trAt(k) {
+      if (k < 0) return NaN;
+      if (k === 0) return D.h[0] - D.l[0];
+      const pc = D.c[k - 1];
+      return Math.max(D.h[k] - D.l[k], Math.abs(D.h[k] - pc), Math.abs(D.l[k] - pc));
+    }
+    function priceAt(name, k) {
+      if (k < 0 || k >= N) return NaN;
+      switch (name) {
+        case 'open': return D.o[k]; case 'high': return D.h[k]; case 'low': return D.l[k]; case 'close': return D.c[k]; case 'volume': return D.v[k];
+        case 'hl2': return (D.h[k] + D.l[k]) / 2; case 'hlc3': return (D.h[k] + D.l[k] + D.c[k]) / 3;
+        case 'ohlc4': return (D.o[k] + D.h[k] + D.l[k] + D.c[k]) / 4; case 'hlcc4': return (D.h[k] + D.l[k] + 2 * D.c[k]) / 4;
+        case 'time': return D.t[k] * 1000; case 'time_close': return (D.t[k] + D.tfSec) * 1000;
+        case 'bar_index': return k; case 'ta.tr': return trAt(k);
+        case 'year': return jst(k).getUTCFullYear(); case 'month': return jst(k).getUTCMonth() + 1; case 'dayofmonth': return jst(k).getUTCDate();
+        case 'dayofweek': return jst(k).getUTCDay() + 1; case 'hour': return jst(k).getUTCHours(); case 'minute': return jst(k).getUTCMinutes();
+        case 'weekofyear': { const d = jst(k); const s = Date.UTC(d.getUTCFullYear(), 0, 1); return Math.ceil(((d - s) / 864e5 + new Date(s).getUTCDay() + 1) / 7); }
+      }
+      return NaN;
+    }
+    const tfPeriod = D.tfSec >= 86400 ? 'D' : String(D.tfSec / 60);
+    function dyn(name) {
+      const B = R.broker;
+      switch (name) {
+        case 'barstate.islast': case 'barstate.isrealtime': return bar === N - 1;
+        case 'barstate.isfirst': return bar === 0;
+        case 'barstate.isconfirmed': case 'barstate.ishistory': return bar < N - 1 || true;
+        case 'barstate.isnew': return true;
+        case 'last_bar_index': return N - 1;
+        case 'last_bar_time': return D.t[N - 1] * 1000;
+        case 'syminfo.mintick': return D.mintick;
+        case 'syminfo.pointvalue': return 1;
+        case 'syminfo.ticker': return D.name; case 'syminfo.tickerid': return 'FX:' + D.name; case 'syminfo.prefix': return 'FX';
+        case 'syminfo.currency': return D.quote || ''; case 'syminfo.basecurrency': return D.base || '';
+        case 'syminfo.type': return 'forex'; case 'syminfo.timezone': return 'Asia/Tokyo';
+        case 'timeframe.period': return tfPeriod; case 'timeframe.multiplier': return D.tfSec >= 86400 ? 1 : D.tfSec / 60;
+        case 'timeframe.isintraday': case 'timeframe.isminutes': return D.tfSec < 86400; case 'timeframe.isdaily': return D.tfSec === 86400;
+        case 'timeframe.isweekly': case 'timeframe.ismonthly': case 'timeframe.isseconds': return false;
+        case 'timenow': return D.t[N - 1] * 1000;
+        case 'strategy.position_size': return B ? B.size : 0;
+        case 'strategy.position_avg_price': return B && B.size ? B.price : NaN;
+        case 'strategy.equity': return B ? B.cap + B.realized + B.unreal(bar) : NaN;
+        case 'strategy.netprofit': return B ? B.realized : 0;
+        case 'strategy.openprofit': return B ? B.unreal(bar) : 0;
+        case 'strategy.initial_capital': return B ? B.cap : NaN;
+        case 'strategy.opentrades': return B && B.size ? 1 : 0;
+        case 'strategy.closedtrades': return B ? B.trades.length : 0;
+        case 'strategy.wintrades': return B ? B.trades.filter(t => t.pnl > 0).length : 0;
+        case 'strategy.losstrades': return B ? B.trades.filter(t => t.pnl < 0).length : 0;
+        case 'strategy.grossprofit': return B ? B.trades.reduce((a, t) => a + Math.max(t.pnl, 0), 0) : 0;
+        case 'strategy.grossloss': return B ? -B.trades.reduce((a, t) => a + Math.min(t.pnl, 0), 0) : 0;
+        case 'strategy.position_entry_name': return B && B.size ? B.eid : '';
+      }
+      return undefined;
+    }
+    function lookup(name, e) {
+      if (LS.length) { const m = LS[LS.length - 1]; if (m.has(name)) return m.get(name).v; }
+      const g = G.get(name);
+      if (g) { const v = g.hist[bar]; return v === undefined ? NaN : v; }
+      if (PRICE_NAMES.has(name)) return priceAt(name, bar);
+      const d = dyn(name); if (d !== undefined) return d;
+      if (name in CONST) return CONST[name];
+      if (F.has(name) || BI[name]) throw new PineError(`「${name}」は関数です。${name}(...) の形で呼び出してください`, e.line);
+      throw new PineError(`「${name}」は定義されていません`, e.line);
+    }
+    function fmtStr(v, fmt) {
+      if (typeof v === 'string') return v;
+      if (typeof v === 'boolean') return v ? 'true' : 'false';
+      if (isColor(v)) return css(v);
+      if (Array.isArray(v)) return '[' + v.map(x => fmtStr(x)).join(', ') + ']';
+      if (typeof v !== 'number') return String(v);
+      if (v !== v) return 'NaN';
+      if (fmt === 'mintick') return v.toFixed(D.digits);
+      if (fmt === 'percent') return v.toFixed(2) + '%';
+      if (fmt === 'volume') return Math.round(v).toLocaleString('en-US');
+      if (typeof fmt === 'string' && /^[#0,]*\.?[#0]*$/.test(fmt) && fmt.length) { const d = (fmt.split('.')[1] || '').length; return v.toFixed(d); }
+      return String(+v.toPrecision(10));
+    }
+    function arith(op, a, b) {
+      if (op === '+' && (typeof a === 'string' || typeof b === 'string')) return fmtStr(a) + fmtStr(b);
+      a = num(a); b = num(b);
+      switch (op) { case '+': return a + b; case '-': return a - b; case '*': return a * b; case '/': return b === 0 ? NaN : a / b; case '%': return b === 0 ? NaN : a % b; }
+      return NaN;
+    }
+    function eq(a, b) {
+      if (typeof a === 'number' && typeof b === 'number') return a === b;
+      if (isColor(a) && isColor(b)) return css(a) === css(b);
+      if (isNa(a) || isNa(b)) return false;
+      return a === b;
+    }
+
+    function ev(e) {
+      switch (e.type) {
+        case 'Lit': return e.v;
+        case 'Id': return lookup(e.name, e);
+        case 'Idx': {
+          const n = Math.floor(num(ev(e.idx)));
+          if (!(n >= 0)) throw new PineError('履歴参照 [ ] には0以上の整数を指定してください', e.line);
+          const t = e.target;
+          if (t.type === 'Id' && !(LS.length && LS[LS.length - 1].has(t.name))) {
+            const g = G.get(t.name);
+            if (g) { const v = g.hist[bar - n]; return v === undefined ? NaN : v; }
+            if (PRICE_NAMES.has(t.name)) return priceAt(t.name, bar - n);
+          }
+          const key = e.id + cp; let arr = NH.get(key); if (!arr) { arr = []; NH.set(key, arr); }
+          const cur = ev(t); arr[bar] = cur;
+          if (n === 0) return cur;
+          const v = arr[bar - n]; return v === undefined ? NaN : v;
+        }
+        case 'Un': { const v = ev(e.x); if (e.op === 'not') return !truthy(v); if (e.op === '-') return -num(v); return num(v); }
+        case 'Bin': {
+          const op = e.op;
+          if (op === 'and') return truthy(ev(e.l)) && truthy(ev(e.r));
+          if (op === 'or') return truthy(ev(e.l)) || truthy(ev(e.r));
+          const a = ev(e.l), b = ev(e.r);
+          switch (op) {
+            case '==': return eq(a, b);
+            case '!=': return !(isNa(a) || isNa(b)) && !eq(a, b);
+            case '<': return num(a) < num(b); case '>': return num(a) > num(b);
+            case '<=': return num(a) <= num(b); case '>=': return num(a) >= num(b);
+          }
+          return arith(op, a, b);
+        }
+        case 'Tern': return truthy(ev(e.c)) ? ev(e.a) : ev(e.b);
+        case 'Tup': return e.items.map(ev);
+        case 'Call': return call(e);
+      }
+      throw new PineError('不明な式です', e.line);
+    }
+    function call(e) {
+      const fn = F.get(e.name);
+      if (fn) {
+        if (depth > 40) throw new PineError('関数の呼び出しが深すぎます（再帰はできません）', e.line);
+        const m = new Map();
+        fn.params.forEach((p, i) => {
+          let v;
+          if (e.named[p.name] !== undefined) v = ev(e.named[p.name]);
+          else if (e.args[i] !== undefined) v = ev(e.args[i]);
+          else if (p.def) v = ev(p.def);
+          else v = NaN;
+          m.set(p.name, { v });
+        });
+        const saved = cp; cp = cp + '/' + e.id; LS.push(m); depth++;
+        try { return fn.expr ? ev(fn.expr) : execBlock(fn.body); }
+        finally { LS.pop(); cp = saved; depth--; }
+      }
+      const b = BI[e.name];
+      if (!b) {
+        if (/^(label|line|box|table|linefill|polyline)\./.test(e.name)) { R.warnings.add('label / line / box / table などの描画オブジェクトは表示されません'); return NaN; }
+        if (/^array\.|^matrix\.|^map\./.test(e.name)) throw new PineError(`配列（${e.name}）にはまだ対応していません`, e.line);
+        if (e.name === 'request.security') throw new PineError('request.security（別の時間足・銘柄の参照）にはまだ対応していません', e.line);
+        throw new PineError(`関数「${e.name}」には対応していません`, e.line);
+      }
+      const A = e.args.map(ev); const K = {};
+      for (const k in e.named) K[k] = ev(e.named[k]);
+      return b(A, K, e);
+    }
+    function setScope(name, v) {
+      if (LS.length) { LS[LS.length - 1].set(name, { v }); return; }
+      let g = G.get(name); if (!g) { g = { hist: [], isVar: false, init: false }; G.set(name, g); }
+      g.hist[bar] = v;
+    }
+    function execBlock(stmts) {
+      let last = NaN;
+      for (const s of stmts) last = exec(s);
+      return last;
+    }
+    function exec(s) {
+      if (++steps > 2e7) throw new PineError('処理が多すぎます（無限ループの可能性があります）', s.line);
+      switch (s.type) {
+        case 'Fn': return NaN;
+        case 'Expr': return ev(s.expr);
+        case 'Decl': {
+          if (LS.length) {
+            const m = LS[LS.length - 1];
+            if (s.isVar) { const key = 'v' + s.id + cp; let box = TSm.get(key); if (!box) { box = { v: ev(s.expr) }; TSm.set(key, box); } m.set(s.name, box); }
+            else m.set(s.name, { v: ev(s.expr) });
+            return NaN;
+          }
+          let g = G.get(s.name);
+          if (!g) { g = { hist: [], isVar: s.isVar, init: false }; G.set(s.name, g); if (s.isVar) varList.push(g); }
+          if (s.isVar) { if (!g.init) { g.hist[bar] = ev(s.expr); g.init = true; } }
+          else g.hist[bar] = ev(s.expr);
+          return NaN;
+        }
+        case 'TDecl': {
+          const v = ev(s.expr);
+          if (!Array.isArray(v)) throw new PineError('右辺が複数の値（タプル）を返しません', s.line);
+          s.names.forEach((n, i) => setScope(n, v[i] === undefined ? NaN : v[i]));
+          return NaN;
+        }
+        case 'Asg': {
+          let box = null, g = null;
+          if (LS.length && LS[LS.length - 1].has(s.name)) box = LS[LS.length - 1].get(s.name);
+          else if (G.has(s.name)) g = G.get(s.name);
+          else throw new PineError(`変数「${s.name}」はまだ宣言されていません（先に「${s.name} = 値」で宣言してください）`, s.line);
+          let v = ev(s.expr);
+          if (s.op !== ':=') { const cur = box ? box.v : (g.hist[bar] === undefined ? NaN : g.hist[bar]); v = arith(s.op[0], cur, v); }
+          if (box) box.v = v; else g.hist[bar] = v;
+          return NaN;
+        }
+        case 'If': {
+          if (truthy(ev(s.cond))) return execBlock(s.then);
+          if (s.els) return execBlock(s.els);
+          return NaN;
+        }
+        case 'For': {
+          const a = num(ev(s.from)), b = num(ev(s.to));
+          if (a !== a || b !== b) return NaN;
+          let st = s.step ? Math.abs(num(ev(s.step))) : 1; if (!(st > 0)) st = 1;
+          const dir = b >= a ? 1 : -1; let last = NaN, it = 0;
+          for (let i = a; dir > 0 ? i <= b : i >= b; i += dir * st) {
+            if (++it > 100000) throw new PineError('for ループの回数が多すぎます', s.line);
+            setScope(s.v, i);
+            try { last = execBlock(s.body); }
+            catch (x) { if (x === BRK) break; if (x === CNT) continue; throw x; }
+          }
+          return last;
+        }
+        case 'While': {
+          let it = 0, last = NaN;
+          while (truthy(ev(s.cond))) {
+            if (++it > 100000) throw new PineError('while ループの回数が多すぎます', s.line);
+            try { last = execBlock(s.body); }
+            catch (x) { if (x === BRK) break; if (x === CNT) continue; throw x; }
+          }
+          return last;
+        }
+        case 'Break': throw BRK;
+        case 'Cont': throw CNT;
+      }
+      return NaN;
+    }
+
+    // ----- builtin helpers -----
+    const ar = (A, K, i, name, def) => K[name] !== undefined ? K[name] : (i >= 0 && A[i] !== undefined ? A[i] : def);
+    const St = e => { const k = e.id + cp; let s = TSm.get(k); if (!s) { s = {}; TSm.set(k, s); } return s; };
+    const sub = (s, k) => s[k] || (s[k] = {});
+    const put = (s, f, v) => { const a = s[f] || (s[f] = []); a[bar] = v; return a; };
+    const at = (a, k) => { if (!a || k < 0) return NaN; const v = a[k]; return v === undefined ? NaN : v; };
+    const Len = (v, e) => { const n = Math.round(num(v)); if (!(n >= 1)) throw new PineError('期間（length）は1以上の整数にしてください', e.line); return n; };
+    function winSum(a, len) {
+      if (bar - len + 1 < 0) return NaN; let s = 0;
+      for (let j = bar - len + 1; j <= bar; j++) { const v = a[j]; if (v === undefined || v !== v) return NaN; s += v; }
+      return s;
+    }
+    function winExt(a, len, isMax) {
+      if (bar - len + 1 < 0) return NaN; let m = isMax ? -Infinity : Infinity, ok = false;
+      for (let j = bar - len + 1; j <= bar; j++) { const v = a[j]; if (v === undefined || v !== v) continue; ok = true; if (isMax ? v > m : v < m) m = v; }
+      return ok ? m : NaN;
+    }
+    function emaCore(s, v, len, alpha) {
+      const a = put(s, 'src', v); const o = s.out || (s.out = []);
+      const p = o[bar - 1]; let r;
+      if (p === undefined || p !== p) r = winSum(a, len) / len;
+      else r = v !== v ? p : alpha * v + (1 - alpha) * p;
+      o[bar] = r; return r;
+    }
+    const smaCore = (s, v, len) => winSum(put(s, 'src', v), len) / len;
+    function stdevCore(s, v, len) {
+      const a = put(s, 'src', v); const m = winSum(a, len) / len; if (m !== m) return NaN;
+      let ss = 0; for (let j = bar - len + 1; j <= bar; j++) ss += (a[j] - m) ** 2;
+      return Math.sqrt(ss / len);
+    }
+    function rsiCore(s, v, len) {
+      const a = put(s, 'src', v); const p = at(a, bar - 1);
+      const u = (p !== p || v !== v) ? NaN : Math.max(v - p, 0), d = (p !== p || v !== v) ? NaN : Math.max(p - v, 0);
+      const ru = emaCore(sub(s, 'u'), u, len, 1 / len), rd = emaCore(sub(s, 'd'), d, len, 1 / len);
+      if (ru !== ru || rd !== rd) return NaN;
+      return rd === 0 ? 100 : ru === 0 ? 0 : 100 - 100 / (1 + ru / rd);
+    }
+    const cssOr = v => isColor(v) ? css(v) : null;
+    const lerp = (a, b, t) => a + (b - a) * t;
+
+    function inp(type, A, K, e) {
+      const key = e.id + cp;
+      if (INC.has(key)) { const c = INC.get(key); return c.type === 'source' ? priceAt(c.value, bar) : c.value; }
+      let def = ar(A, K, 0, 'defval');
+      const title = String(ar(A, K, 1, 'title', '') || '');
+      const a0 = e.args[0] || e.named.defval;
+      if (type === 'auto') {
+        if (a0 && a0.type === 'Id' && SOURCES.includes(a0.name)) type = 'source';
+        else if (typeof def === 'boolean') type = 'bool';
+        else if (typeof def === 'string') type = 'string';
+        else if (isColor(def)) type = 'color';
+        else type = Number.isInteger(def) ? 'int' : 'float';
+      }
+      if (type === 'source') def = (a0 && a0.type === 'Id' && SOURCES.includes(a0.name)) ? a0.name : 'close';
+      const base = title || type;
+      const k = base + '#' + R.inputs.filter(x => (x.title || x.type) === base).length;
+      let opts = Array.isArray(K.options) ? K.options : (Array.isArray(A[2]) ? A[2] : null);
+      const minv = K.minval !== undefined ? num(K.minval) : (typeof A[2] === 'number' ? A[2] : undefined);
+      const maxv = K.maxval !== undefined ? num(K.maxval) : (typeof A[3] === 'number' ? A[3] : undefined);
+      const step = K.step !== undefined ? num(K.step) : (typeof A[4] === 'number' ? A[4] : undefined);
+      let val = Object.prototype.hasOwnProperty.call(inOv, k) ? inOv[k] : def;
+      if (type === 'int' || type === 'float') {
+        val = num(typeof val === 'string' ? parseFloat(val) : val);
+        if (val !== val) val = num(def);
+        if (type === 'int') val = Math.round(val);
+        if (minv !== undefined && val < minv) val = minv;
+        if (maxv !== undefined && val > maxv) val = maxv;
+      } else if (type === 'bool') val = val === true || val === 'true';
+      else if (type === 'source') { if (!SOURCES.includes(val)) val = def; }
+      else if (type === 'color') val = def;
+      else if (type === 'string' || type === 'timeframe' || type === 'session' || type === 'symbol') { val = String(val); if (opts && !opts.includes(val)) val = def; }
+      R.inputs.push({ key: k, type, title: base, def: isColor(def) ? css(def) : def, value: isColor(val) ? css(val) : val, min: minv, max: maxv, step, options: opts, tooltip: K.tooltip, group: K.group });
+      INC.set(key, { type, value: val });
+      return type === 'source' ? priceAt(val, bar) : val;
+    }
+
+    function mkBroker(cfg) {
+      const B = { cap: cfg.cap, qtyType: cfg.qtyType, qtyVal: cfg.qtyVal, size: 0, price: NaN, eid: null, ebar: -1, pend: [], exits: new Map(), trades: [], realized: 0, eq: new Array(N).fill(NaN), marks: [] };
+      const defQty = px => B.qtyType === 'cash' ? B.qtyVal / px : B.qtyType === 'percent' ? (B.cap + B.realized) * B.qtyVal / 100 / px : B.qtyVal;
+      B.unreal = k => { if (!B.size) return 0; const c = D.c[k]; return B.size > 0 ? (c - B.price) * B.size : (B.price - (c + spreadPx)) * -B.size; };
+      function openPos(dir, id, qty, px, i) {
+        B.size = dir * qty; B.price = dir > 0 ? px + spreadPx : px; B.eid = id; B.ebar = i;
+        B.marks.push({ bar: i, kind: 'entry', dir, text: id });
+      }
+      function closePos(px, i, reason) {
+        if (!B.size) return;
+        const dir = Math.sign(B.size), qty = Math.abs(B.size);
+        const xp = dir > 0 ? px : px + spreadPx;
+        const pnl = (xp - B.price) * dir * qty;
+        B.realized += pnl;
+        B.trades.push({ dir, id: B.eid, eb: B.ebar, xb: i, ep: B.price, xp, qty, pnl, pips: (xp - B.price) * dir / D.pip, reason });
+        B.marks.push({ bar: i, kind: 'exit', dir, text: reason });
+        B.exits.delete(B.eid);
+        B.size = 0; B.price = NaN; B.eid = null;
+      }
+      B.open = i => {
+        const px = D.o[i];
+        const pend = B.pend; B.pend = [];
+        for (const o of pend) {
+          if (o.k === 'entry') {
+            if (B.size && Math.sign(B.size) === o.dir) continue;
+            if (B.size) closePos(px, i, 'ドテン');
+            const q = o.qty > 0 ? o.qty : defQty(px);
+            openPos(o.dir, o.id, q, px, i);
+          } else if (o.k === 'close') {
+            if (B.size && (o.id == null || B.eid === o.id)) closePos(px, i, o.cmt || '決済');
+          }
+        }
+        if (!B.size) return;
+        const ex = B.exits.get(B.eid) || B.exits.get('');
+        if (!ex) return;
+        const dir = Math.sign(B.size);
+        let stop = ex.stop, lim = ex.limit;
+        if (!(stop === stop) && ex.loss > 0) stop = B.price - dir * ex.loss * D.mintick;
+        if (!(lim === lim) && ex.profit > 0) lim = B.price + dir * ex.profit * D.mintick;
+        const hasS = stop === stop, hasL = lim === lim;
+        if (!hasS && !hasL) return;
+        const o = D.o[i], h = D.h[i], l = D.l[i], c = D.c[i], sp = dir < 0 ? spreadPx : 0;
+        let hitS = false, hitL = false, sPx, lPx;
+        if (dir > 0) {
+          if (hasS && l <= stop) { hitS = true; sPx = Math.min(o, stop); }
+          if (hasL && h >= lim) { hitL = true; lPx = Math.max(o, lim); }
+        } else {
+          if (hasS && h + sp >= stop) { hitS = true; sPx = Math.max(o + sp, stop); }
+          if (hasL && l + sp <= lim) { hitL = true; lPx = Math.min(o + sp, lim); }
+        }
+        if (!hitS && !hitL) return;
+        let useStop = hitS;
+        if (hitS && hitL) {
+          if (dir > 0) useStop = o <= stop ? true : o >= lim ? false : c >= o;
+          else useStop = o + sp >= stop ? true : o + sp <= lim ? false : c < o;
+        }
+        const p = useStop ? sPx : lPx;
+        closePos(dir > 0 ? p : p - sp, i, useStop ? '損切り' : '利確');
+      };
+      B.close = i => { B.eq[i] = B.cap + B.realized + B.unreal(i); };
+      return B;
+    }
+    function needBroker(e) { if (!R.broker) throw new PineError('strategy.* 関数を使うには、最初に strategy(...) を宣言してください', e.line); return R.broker; }
+
+    const BI = {
+      indicator: (A, K) => {
+        if (bar === 0) { R.meta.title = String(ar(A, K, 0, 'title', '無題')); R.meta.overlay = truthy(ar(A, K, 2, 'overlay', false)); const p = K.precision; if (p !== undefined) R.meta.precision = num(p); R.meta.kind = 'indicator'; }
+        return NaN;
+      },
+      strategy: (A, K) => {
+        if (bar === 0) {
+          R.meta.title = String(ar(A, K, 0, 'title', '無題')); R.meta.overlay = truthy(ar(A, K, 2, 'overlay', false)); R.meta.kind = 'strategy';
+          if (K.precision !== undefined) R.meta.precision = num(K.precision);
+          R.broker = mkBroker({ cap: num(ar(A, K, -1, 'initial_capital', D.defCap || 1000000)), qtyType: ar(A, K, -1, 'default_qty_type', 'fixed'), qtyVal: num(ar(A, K, -1, 'default_qty_value', D.defQty || 10000)) });
+        }
+        return NaN;
+      },
+      plot: (A, K, e) => {
+        const key = e.id + cp; let p = R.plotMap.get(key);
+        if (!p) {
+          if (truthy(K.display === 'none')) { /* hidden plot */ }
+          p = { id: key, title: String(ar(A, K, 1, 'title', '') || ('プロット' + (R.plots.length + 1))), style: ar(A, K, 4, 'style', 'line'), lw: num(ar(A, K, 3, 'linewidth', 1)) || 1, values: new Array(N).fill(NaN), colors: new Array(N), hasColor: false, hidden: K.display === 'none' };
+          R.plotMap.set(key, p); R.plots.push(p);
+        }
+        p.values[bar] = num(ar(A, K, 0, 'series', NaN));
+        const c = ar(A, K, 2, 'color');
+        if (c !== undefined) { p.hasColor = true; p.colors[bar] = isColor(c) ? css(c) : 'rgba(0,0,0,0)'; }
+        return { plotRef: key };
+      },
+      plotshape: (A, K) => {
+        if (truthy(ar(A, K, 0, 'series', false))) {
+          const c = ar(A, K, 4, 'color', CONST['color.blue']);
+          R.shapes.push({ bar, shape: ar(A, K, 2, 'style', 'circle'), pos: ar(A, K, 3, 'location', 'aboveBar'), color: cssOr(c) || css(CONST['color.blue']), text: String(ar(A, K, 6, 'text', '') || ''), size: num(ar(A, K, 9, 'size', 1)) || 1 });
+        }
+        return NaN;
+      },
+      plotchar: (A, K) => {
+        if (truthy(ar(A, K, 0, 'series', false))) {
+          const c = ar(A, K, 4, 'color', CONST['color.blue']);
+          const ch = String(ar(A, K, 2, 'char', '★')); const tx = String(ar(A, K, 6, 'text', '') || '');
+          R.shapes.push({ bar, shape: 'circle', pos: ar(A, K, 3, 'location', 'aboveBar'), color: cssOr(c) || css(CONST['color.blue']), text: (ch + ' ' + tx).trim(), size: 0.4 });
+        }
+        return NaN;
+      },
+      plotarrow: (A, K) => {
+        const v = num(ar(A, K, 0, 'series', NaN));
+        if (v > 0) R.shapes.push({ bar, shape: 'arrowUp', pos: 'belowBar', color: cssOr(ar(A, K, 2, 'colorup', CONST['color.teal'])), text: '', size: 1 });
+        else if (v < 0) R.shapes.push({ bar, shape: 'arrowDown', pos: 'aboveBar', color: cssOr(ar(A, K, 3, 'colordown', CONST['color.red'])), text: '', size: 1 });
+        return NaN;
+      },
+      hline: (A, K) => {
+        if (bar === 0) R.hlines.push({ price: num(ar(A, K, 0, 'price', NaN)), title: String(ar(A, K, 1, 'title', '') || ''), color: cssOr(ar(A, K, 2, 'color', CONST['color.gray'])) || css(CONST['color.gray']), style: ar(A, K, 3, 'linestyle', 2), lw: num(ar(A, K, 4, 'linewidth', 1)) || 1 });
+        return NaN;
+      },
+      bgcolor: (A, K) => { const c = ar(A, K, 0, 'color'); if (isColor(c)) R.bg[bar] = css(c); return NaN; },
+      barcolor: (A, K) => { const c = ar(A, K, 0, 'color'); if (isColor(c)) R.barColors[bar] = css(c); return NaN; },
+      fill: () => { R.warnings.add('fill()（線の間の塗りつぶし）は表示されません'); return NaN; },
+      alertcondition: () => NaN, alert: () => NaN, max_bars_back: () => NaN,
+      'runtime.error': (A, K, e) => { throw new PineError(String(A[0]), e.line); },
+      timestamp: (A) => {
+        if (A.length >= 5) { const [y, mo, d, h, mi] = A.slice(-5).map(num); return Date.UTC(y, mo - 1, d, h, mi) - 9 * 3600 * 1000; }
+        if (typeof A[0] === 'string') return Date.parse(A[0]);
+        return NaN;
+      },
+
+      input: (A, K, e) => inp('auto', A, K, e),
+      'input.int': (A, K, e) => inp('int', A, K, e),
+      'input.float': (A, K, e) => inp('float', A, K, e),
+      'input.price': (A, K, e) => inp('float', A, K, e),
+      'input.bool': (A, K, e) => inp('bool', A, K, e),
+      'input.string': (A, K, e) => inp('string', A, K, e),
+      'input.text_area': (A, K, e) => inp('string', A, K, e),
+      'input.source': (A, K, e) => inp('source', A, K, e),
+      'input.color': (A, K, e) => inp('color', A, K, e),
+      'input.timeframe': (A, K, e) => inp('timeframe', A, K, e),
+      'input.session': (A, K, e) => inp('session', A, K, e),
+      'input.symbol': (A, K, e) => inp('symbol', A, K, e),
+
+      'ta.sma': (A, K, e) => smaCore(St(e), num(ar(A, K, 0, 'source')), Len(ar(A, K, 1, 'length'), e)),
+      'ta.ema': (A, K, e) => { const n = Len(ar(A, K, 1, 'length'), e); return emaCore(St(e), num(ar(A, K, 0, 'source')), n, 2 / (n + 1)); },
+      'ta.rma': (A, K, e) => { const n = Len(ar(A, K, 1, 'length'), e); return emaCore(St(e), num(ar(A, K, 0, 'source')), n, 1 / n); },
+      'ta.wma': (A, K, e) => {
+        const n = Len(ar(A, K, 1, 'length'), e); const a = put(St(e), 'src', num(ar(A, K, 0, 'source')));
+        if (bar - n + 1 < 0) return NaN; let s = 0;
+        for (let j = 0; j < n; j++) { const v = a[bar - j]; if (v === undefined || v !== v) return NaN; s += v * (n - j); }
+        return s / (n * (n + 1) / 2);
+      },
+      'ta.hma': (A, K, e) => {
+        const n = Len(ar(A, K, 1, 'length'), e); const src = num(ar(A, K, 0, 'source')); const s = St(e);
+        const w = (ss, v, len) => { const a = put(ss, 'src', v); if (bar - len + 1 < 0) return NaN; let t = 0; for (let j = 0; j < len; j++) { const x = a[bar - j]; if (x === undefined || x !== x) return NaN; t += x * (len - j); } return t / (len * (len + 1) / 2); };
+        const h = Math.max(1, Math.floor(n / 2)), sq = Math.max(1, Math.round(Math.sqrt(n)));
+        return w(sub(s, 'c'), 2 * w(sub(s, 'a'), src, h) - w(sub(s, 'b'), src, n), sq);
+      },
+      'ta.vwma': (A, K, e) => { const n = Len(ar(A, K, 1, 'length'), e); const s = St(e); const src = num(ar(A, K, 0, 'source')); const v = D.v[bar]; const pv = winSum(put(s, 'pv', src * v), n), vv = winSum(put(s, 'v', v), n); return vv ? pv / vv : NaN; },
+      'ta.rsi': (A, K, e) => rsiCore(St(e), num(ar(A, K, 0, 'source')), Len(ar(A, K, 1, 'length'), e)),
+      'ta.stdev': (A, K, e) => stdevCore(St(e), num(ar(A, K, 0, 'source')), Len(ar(A, K, 1, 'length'), e)),
+      'ta.variance': (A, K, e) => { const v = stdevCore(St(e), num(ar(A, K, 0, 'source')), Len(ar(A, K, 1, 'length'), e)); return v * v; },
+      'ta.dev': (A, K, e) => {
+        const n = Len(ar(A, K, 1, 'length'), e); const a = put(St(e), 'src', num(ar(A, K, 0, 'source'))); const m = winSum(a, n) / n; if (m !== m) return NaN;
+        let s = 0; for (let j = bar - n + 1; j <= bar; j++) s += Math.abs(a[j] - m); return s / n;
+      },
+      'ta.bb': (A, K, e) => {
+        const s = St(e), src = num(ar(A, K, 0, 'series')), n = Len(ar(A, K, 1, 'length'), e), mult = num(ar(A, K, 2, 'mult', 2));
+        const mid = smaCore(sub(s, 'm'), src, n), dev = mult * stdevCore(sub(s, 'd'), src, n);
+        return [mid, mid + dev, mid - dev];
+      },
+      'ta.bbw': (A, K, e) => {
+        const s = St(e), src = num(ar(A, K, 0, 'series')), n = Len(ar(A, K, 1, 'length'), e), mult = num(ar(A, K, 2, 'mult', 2));
+        const mid = smaCore(sub(s, 'm'), src, n), dev = mult * stdevCore(sub(s, 'd'), src, n);
+        return mid ? (2 * dev) / mid * 100 : NaN;
+      },
+      'ta.kc': (A, K, e) => {
+        const s = St(e), src = num(ar(A, K, 0, 'series')), n = Len(ar(A, K, 1, 'length'), e), mult = num(ar(A, K, 2, 'mult', 1.5));
+        const mid = emaCore(sub(s, 'm'), src, n, 2 / (n + 1)), rng = emaCore(sub(s, 'r'), trAt(bar), n, 2 / (n + 1));
+        return [mid, mid + mult * rng, mid - mult * rng];
+      },
+      'ta.macd': (A, K, e) => {
+        const s = St(e), src = num(ar(A, K, 0, 'source')), f = Len(ar(A, K, 1, 'fastlen'), e), sl = Len(ar(A, K, 2, 'slowlen'), e), sg = Len(ar(A, K, 3, 'siglen'), e);
+        const m = emaCore(sub(s, 'f'), src, f, 2 / (f + 1)) - emaCore(sub(s, 's'), src, sl, 2 / (sl + 1));
+        const sig = emaCore(sub(s, 'g'), m, sg, 2 / (sg + 1));
+        return [m, sig, m - sig];
+      },
+      'ta.tr': () => trAt(bar),
+      'ta.atr': (A, K, e) => { const n = Len(ar(A, K, 0, 'length'), e); return emaCore(St(e), trAt(bar), n, 1 / n); },
+      'ta.highest': (A, K, e) => {
+        let src, n; if (A.length + Object.keys(K).length <= 1) { src = D.h[bar]; n = Len(ar(A, K, 0, 'length'), e); } else { src = num(ar(A, K, 0, 'source')); n = Len(ar(A, K, 1, 'length'), e); }
+        return winExt(put(St(e), 'src', src), n, true);
+      },
+      'ta.lowest': (A, K, e) => {
+        let src, n; if (A.length + Object.keys(K).length <= 1) { src = D.l[bar]; n = Len(ar(A, K, 0, 'length'), e); } else { src = num(ar(A, K, 0, 'source')); n = Len(ar(A, K, 1, 'length'), e); }
+        return winExt(put(St(e), 'src', src), n, false);
+      },
+      'ta.highestbars': (A, K, e) => {
+        let src, n; if (A.length <= 1) { src = D.h[bar]; n = Len(A[0], e); } else { src = num(A[0]); n = Len(A[1], e); }
+        const a = put(St(e), 'src', src); if (bar - n + 1 < 0) return NaN; let m = -Infinity, mi = 0;
+        for (let j = 0; j < n; j++) { const v = a[bar - j]; if (v > m) { m = v; mi = j; } } return -mi;
+      },
+      'ta.lowestbars': (A, K, e) => {
+        let src, n; if (A.length <= 1) { src = D.l[bar]; n = Len(A[0], e); } else { src = num(A[0]); n = Len(A[1], e); }
+        const a = put(St(e), 'src', src); if (bar - n + 1 < 0) return NaN; let m = Infinity, mi = 0;
+        for (let j = 0; j < n; j++) { const v = a[bar - j]; if (v < m) { m = v; mi = j; } } return -mi;
+      },
+      'ta.crossover': (A, K, e) => { const s = St(e); const a = put(s, 'a', num(A[0])), b = put(s, 'b', num(A[1])); return a[bar] > b[bar] && at(a, bar - 1) <= at(b, bar - 1); },
+      'ta.crossunder': (A, K, e) => { const s = St(e); const a = put(s, 'a', num(A[0])), b = put(s, 'b', num(A[1])); return a[bar] < b[bar] && at(a, bar - 1) >= at(b, bar - 1); },
+      'ta.cross': (A, K, e) => {
+        const s = St(e); const a = put(s, 'a', num(A[0])), b = put(s, 'b', num(A[1]));
+        const pa = at(a, bar - 1), pb = at(b, bar - 1);
+        return (a[bar] > b[bar] && pa <= pb) || (a[bar] < b[bar] && pa >= pb);
+      },
+      'ta.change': (A, K, e) => {
+        const v = ar(A, K, 0, 'source'); const n = Math.round(num(ar(A, K, 1, 'length', 1)));
+        const a = put(St(e), 'src', v); const p = a[bar - n];
+        if (typeof v === 'boolean') return p === undefined ? false : v !== p;
+        return num(v) - (p === undefined ? NaN : num(p));
+      },
+      'ta.mom': (A, K, e) => { const n = Len(ar(A, K, 1, 'length'), e); const a = put(St(e), 'src', num(ar(A, K, 0, 'source'))); return a[bar] - at(a, bar - n); },
+      'ta.roc': (A, K, e) => { const n = Len(ar(A, K, 1, 'length'), e); const a = put(St(e), 'src', num(ar(A, K, 0, 'source'))); const p = at(a, bar - n); return p ? 100 * (a[bar] - p) / p : NaN; },
+      'ta.stoch': (A, K, e) => {
+        const s = St(e), n = Len(ar(A, K, 3, 'length'), e);
+        const hh = winExt(put(s, 'h', num(ar(A, K, 1, 'high'))), n, true), ll = winExt(put(s, 'l', num(ar(A, K, 2, 'low'))), n, false);
+        const src = num(ar(A, K, 0, 'source')); return hh - ll ? 100 * (src - ll) / (hh - ll) : NaN;
+      },
+      'ta.cci': (A, K, e) => {
+        const n = Len(ar(A, K, 1, 'length'), e); const a = put(St(e), 'src', num(ar(A, K, 0, 'source'))); const m = winSum(a, n) / n; if (m !== m) return NaN;
+        let md = 0; for (let j = bar - n + 1; j <= bar; j++) md += Math.abs(a[j] - m); md /= n;
+        return md ? (a[bar] - m) / (0.015 * md) : NaN;
+      },
+      'ta.mfi': (A, K, e) => {
+        const s = St(e), n = Len(ar(A, K, 1, 'length'), e); const src = num(ar(A, K, 0, 'series'));
+        const a = put(s, 'src', src); const p = at(a, bar - 1); const mf = src * D.v[bar];
+        const up = winSum(put(s, 'u', p !== p ? NaN : src > p ? mf : 0), n), dn = winSum(put(s, 'd', p !== p ? NaN : src < p ? mf : 0), n);
+        return up + dn ? 100 - 100 / (1 + up / (dn || 1e-12)) : NaN;
+      },
+      'ta.wpr': (A, K, e) => {
+        const s = St(e), n = Len(ar(A, K, 0, 'length'), e);
+        const hh = winExt(put(s, 'h', D.h[bar]), n, true), ll = winExt(put(s, 'l', D.l[bar]), n, false);
+        return hh - ll ? 100 * (D.c[bar] - hh) / (hh - ll) : NaN;
+      },
+      'ta.dmi': (A, K, e) => {
+        const s = St(e), dl = Len(ar(A, K, 0, 'diLength'), e), al = Len(ar(A, K, 1, 'adxSmoothing'), e);
+        const up = bar ? D.h[bar] - D.h[bar - 1] : NaN, dn = bar ? D.l[bar - 1] - D.l[bar] : NaN;
+        const pdm = up !== up ? NaN : (up > dn && up > 0 ? up : 0), mdm = dn !== dn ? NaN : (dn > up && dn > 0 ? dn : 0);
+        const tr = emaCore(sub(s, 't'), trAt(bar), dl, 1 / dl);
+        const plus = 100 * emaCore(sub(s, 'p'), pdm, dl, 1 / dl) / tr, minus = 100 * emaCore(sub(s, 'm'), mdm, dl, 1 / dl) / tr;
+        const sum = plus + minus;
+        const adx = 100 * emaCore(sub(s, 'a'), Math.abs(plus - minus) / (sum === 0 ? 1 : sum), al, 1 / al);
+        return [plus, minus, adx];
+      },
+      'ta.supertrend': (A, K, e) => {
+        const s = St(e), f = num(ar(A, K, 0, 'factor', 3)), n = Len(ar(A, K, 1, 'atrPeriod'), e);
+        const atr = emaCore(sub(s, 'atr'), trAt(bar), n, 1 / n); const atrA = s.atr.out;
+        const src = (D.h[bar] + D.l[bar]) / 2;
+        let lb = src - f * atr, ub = src + f * atr;
+        const pl = at(s.lb, bar - 1), pu = at(s.ub, bar - 1), pc = bar ? D.c[bar - 1] : NaN;
+        const plz = pl === pl ? pl : 0, puz = pu === pu ? pu : 0;
+        lb = (lb > plz || pc < plz) ? lb : plz;
+        ub = (ub < puz || pc > puz) ? ub : puz;
+        const pst = at(s.st, bar - 1); let dir;
+        if (at(atrA, bar - 1) !== at(atrA, bar - 1)) dir = 1;
+        else if (pst === pu) dir = D.c[bar] > ub ? -1 : 1;
+        else dir = D.c[bar] < lb ? 1 : -1;
+        const st = dir === -1 ? lb : ub;
+        put(s, 'lb', lb); put(s, 'ub', ub); put(s, 'st', st); put(s, 'dir', dir);
+        if (atr !== atr) return [NaN, NaN];
+        return [st, dir];
+      },
+      'ta.sar': (A, K, e) => {
+        const s = St(e), start = num(A[0] ?? 0.02), inc = num(A[1] ?? 0.02), mx = num(A[2] ?? 0.2);
+        if (s.lastBar === bar) return s.outs[bar];
+        s.outs = s.outs || [];
+        if (bar === 0) { s.up = true; s.af = start; s.ep = D.h[0]; s.sar = D.l[0]; s.lastBar = 0; s.outs[0] = NaN; return NaN; }
+        let sar = s.sar + s.af * (s.ep - s.sar);
+        if (s.up) {
+          sar = Math.min(sar, D.l[bar - 1], bar > 1 ? D.l[bar - 2] : D.l[bar - 1]);
+          if (D.l[bar] < sar) { s.up = false; sar = s.ep; s.ep = D.l[bar]; s.af = start; }
+          else if (D.h[bar] > s.ep) { s.ep = D.h[bar]; s.af = Math.min(mx, s.af + inc); }
+        } else {
+          sar = Math.max(sar, D.h[bar - 1], bar > 1 ? D.h[bar - 2] : D.h[bar - 1]);
+          if (D.h[bar] > sar) { s.up = true; sar = s.ep; s.ep = D.h[bar]; s.af = start; }
+          else if (D.l[bar] < s.ep) { s.ep = D.l[bar]; s.af = Math.min(mx, s.af + inc); }
+        }
+        s.sar = sar; s.lastBar = bar; s.outs[bar] = sar; return sar;
+      },
+      'ta.barssince': (A, K, e) => { const s = St(e); const lb = s.lb || (s.lb = []); lb[bar] = truthy(A[0]) ? bar : at(lb, bar - 1); return lb[bar] === lb[bar] ? bar - lb[bar] : NaN; },
+      'ta.valuewhen': (A, K, e) => {
+        const s = St(e); s.occ = s.occ || [];
+        if (truthy(ar(A, K, 0, 'condition')) && s.lastPush !== bar) { s.occ.push(ar(A, K, 1, 'source')); s.lastPush = bar; }
+        const k = Math.round(num(ar(A, K, 2, 'occurrence', 0))); const v = s.occ[s.occ.length - 1 - k];
+        return v === undefined ? NaN : v;
+      },
+      'ta.cum': (A, K, e) => { const s = St(e); const o = s.o || (s.o = []); const p = at(o, bar - 1); const v = num(A[0]); o[bar] = (p === p ? p : 0) + (v === v ? v : 0); return o[bar]; },
+      'ta.rising': (A, K, e) => { const n = Len(A[1], e); const a = put(St(e), 'src', num(A[0])); if (bar - n < 0) return false; for (let j = 0; j < n; j++) if (!(a[bar - j] > a[bar - j - 1])) return false; return true; },
+      'ta.falling': (A, K, e) => { const n = Len(A[1], e); const a = put(St(e), 'src', num(A[0])); if (bar - n < 0) return false; for (let j = 0; j < n; j++) if (!(a[bar - j] < a[bar - j - 1])) return false; return true; },
+      'ta.pivothigh': (A, K, e) => {
+        let src, l, r; if (A.length >= 3) { src = num(A[0]); l = num(A[1]); r = num(A[2]); } else { src = D.h[bar]; l = num(ar(A, K, 0, 'leftbars')); r = num(ar(A, K, 1, 'rightbars')); }
+        const a = put(St(e), 'src', src); const c = bar - r; if (c - l < 0) return NaN; const v = a[c];
+        for (let j = c - l; j <= bar; j++) if (j !== c && !(a[j] < v)) return NaN; return v;
+      },
+      'ta.pivotlow': (A, K, e) => {
+        let src, l, r; if (A.length >= 3) { src = num(A[0]); l = num(A[1]); r = num(A[2]); } else { src = D.l[bar]; l = num(ar(A, K, 0, 'leftbars')); r = num(ar(A, K, 1, 'rightbars')); }
+        const a = put(St(e), 'src', src); const c = bar - r; if (c - l < 0) return NaN; const v = a[c];
+        for (let j = c - l; j <= bar; j++) if (j !== c && !(a[j] > v)) return NaN; return v;
+      },
+      'ta.median': (A, K, e) => { const n = Len(A[1], e); const a = put(St(e), 'src', num(A[0])); if (bar - n + 1 < 0) return NaN; const w = a.slice(bar - n + 1, bar + 1).sort((x, y) => x - y); return n % 2 ? w[(n - 1) / 2] : (w[n / 2 - 1] + w[n / 2]) / 2; },
+      'ta.correlation': (A, K, e) => {
+        const n = Len(A[2], e), s = St(e); const x = put(s, 'x', num(A[0])), y = put(s, 'y', num(A[1])); if (bar - n + 1 < 0) return NaN;
+        let mx = 0, my = 0; for (let j = bar - n + 1; j <= bar; j++) { mx += x[j]; my += y[j]; } mx /= n; my /= n;
+        let sxy = 0, sxx = 0, syy = 0; for (let j = bar - n + 1; j <= bar; j++) { const a = x[j] - mx, b = y[j] - my; sxy += a * b; sxx += a * a; syy += b * b; }
+        return sxy / Math.sqrt(sxx * syy);
+      },
+      'ta.linreg': (A, K, e) => {
+        const n = Len(A[1], e), off = num(A[2] ?? 0); const a = put(St(e), 'src', num(A[0])); if (bar - n + 1 < 0) return NaN;
+        let sx = 0, sy = 0, sxy = 0, sxx = 0; for (let j = 0; j < n; j++) { const x = j, y = a[bar - n + 1 + j]; sx += x; sy += y; sxy += x * y; sxx += x * x; }
+        const slope = (n * sxy - sx * sy) / (n * sxx - sx * sx), icpt = (sy - slope * sx) / n; return icpt + slope * (n - 1 - off);
+      },
+
+      'math.abs': A => Math.abs(num(A[0])), 'math.sqrt': A => Math.sqrt(num(A[0])), 'math.pow': A => Math.pow(num(A[0]), num(A[1])),
+      'math.log': A => Math.log(num(A[0])), 'math.log10': A => Math.log10(num(A[0])), 'math.exp': A => Math.exp(num(A[0])),
+      'math.floor': A => Math.floor(num(A[0])), 'math.ceil': A => Math.ceil(num(A[0])), 'math.sign': A => Math.sign(num(A[0])),
+      'math.sin': A => Math.sin(num(A[0])), 'math.cos': A => Math.cos(num(A[0])), 'math.tan': A => Math.tan(num(A[0])), 'math.atan': A => Math.atan(num(A[0])),
+      'math.round': (A, K) => { const x = num(A[0]); const p = num(ar(A, K, 1, 'precision', 0)) || 0; const f = 10 ** p; return Math.round(x * f) / f; },
+      'math.round_to_mintick': A => Math.round(num(A[0]) / D.mintick) * D.mintick,
+      'math.max': A => { let m = -Infinity; for (const v of A) { const x = num(v); if (x !== x) return NaN; if (x > m) m = x; } return m; },
+      'math.min': A => { let m = Infinity; for (const v of A) { const x = num(v); if (x !== x) return NaN; if (x < m) m = x; } return m; },
+      'math.avg': A => A.reduce((s, v) => s + num(v), 0) / A.length,
+      'math.sum': (A, K, e) => winSum(put(St(e), 'src', num(A[0])), Len(A[1], e)),
+      'math.random': (A) => { const lo = num(A[0] ?? 0), hi = num(A[1] ?? 1); return lo + Math.random() * (hi - lo); },
+      'math.todegrees': A => num(A[0]) * 180 / Math.PI, 'math.toradians': A => num(A[0]) * Math.PI / 180,
+      nz: (A, K) => { const v = A[0]; const r = ar(A, K, 1, 'replacement', 0); return isNa(v) ? r : v; },
+      na: A => isNa(A[0]) || A[0] === undefined,
+      fixnan: (A, K, e) => { const s = St(e); const v = A[0]; if (!isNa(v)) s.last = v; return s.last === undefined ? NaN : s.last; },
+      int: A => { const v = num(A[0]); return v === v ? Math.trunc(v) : NaN; },
+      float: A => num(A[0]), bool: A => truthy(A[0]), string: A => fmtStr(A[0]),
+      'str.tostring': (A, K) => fmtStr(A[0], ar(A, K, 1, 'format')),
+      'str.format': A => String(A[0]).replace(/\{(\d+)(?:,[^}]*)?\}/g, (m, i) => fmtStr(A[+i + 1])),
+      'str.length': A => String(A[0]).length,
+      'str.contains': A => String(A[0]).includes(String(A[1])),
+      'str.upper': A => String(A[0]).toUpperCase(), 'str.lower': A => String(A[0]).toLowerCase(),
+      'str.tonumber': A => { const v = parseFloat(A[0]); return v === v ? v : NaN; },
+      'color.new': (A, K) => { const c = ar(A, K, 0, 'color'); if (!isColor(c)) return NaN; const t = num(ar(A, K, 1, 'transp', 0)); return C(c.r, c.g, c.b, Math.max(0, Math.min(1, 1 - t / 100))); },
+      'color.rgb': A => C(num(A[0]), num(A[1]), num(A[2]), 1 - num(A[3] ?? 0) / 100),
+      'color.r': A => isColor(A[0]) ? A[0].r : NaN, 'color.g': A => isColor(A[0]) ? A[0].g : NaN, 'color.b': A => isColor(A[0]) ? A[0].b : NaN,
+      'color.t': A => isColor(A[0]) ? (1 - A[0].a) * 100 : NaN,
+      'color.from_gradient': A => {
+        const v = num(A[0]), lo = num(A[1]), hi = num(A[2]), c1 = A[3], c2 = A[4];
+        if (!isColor(c1) || !isColor(c2) || v !== v) return NaN;
+        const t = hi === lo ? 0 : Math.max(0, Math.min(1, (v - lo) / (hi - lo)));
+        return C(lerp(c1.r, c2.r, t), lerp(c1.g, c2.g, t), lerp(c1.b, c2.b, t), lerp(c1.a, c2.a, t));
+      },
+
+      'strategy.entry': (A, K, e) => {
+        const B = needBroker(e); const id = String(ar(A, K, 0, 'id', 'entry')); const dir = num(ar(A, K, 1, 'direction', 1)) > 0 ? 1 : -1;
+        B.pend = B.pend.filter(o => !(o.k === 'entry' && o.id === id));
+        B.pend.push({ k: 'entry', id, dir, qty: num(ar(A, K, 2, 'qty', NaN)) }); return NaN;
+      },
+      'strategy.order': (A, K, e) => BI['strategy.entry'](A, K, e),
+      'strategy.close': (A, K, e) => { const B = needBroker(e); B.pend.push({ k: 'close', id: String(ar(A, K, 0, 'id', '')), cmt: K.comment ? String(K.comment) : '' }); return NaN; },
+      'strategy.close_all': (A, K, e) => { const B = needBroker(e); B.pend.push({ k: 'close', id: null, cmt: K.comment ? String(K.comment) : '' }); return NaN; },
+      'strategy.exit': (A, K, e) => {
+        const B = needBroker(e);
+        const from = String(ar(A, K, 1, 'from_entry', '') || '');
+        const ex = { stop: num(ar(A, K, 7, 'stop', NaN)), limit: num(ar(A, K, 5, 'limit', NaN)), profit: num(ar(A, K, 4, 'profit', NaN)), loss: num(ar(A, K, 6, 'loss', NaN)) };
+        if (ex.stop === ex.stop || ex.limit === ex.limit || ex.profit > 0 || ex.loss > 0) B.exits.set(from, ex);
+        if (K.trail_points !== undefined || K.trail_offset !== undefined) R.warnings.add('トレーリングストップ（trail_*）には未対応です');
+        return NaN;
+      },
+      'strategy.cancel': (A, K, e) => { const B = needBroker(e); const id = String(A[0]); B.pend = B.pend.filter(o => o.id !== id); return NaN; },
+      'strategy.cancel_all': (A, K, e) => { needBroker(e).pend = []; return NaN; },
+    };
+    BI.study = BI.indicator;
+
+    for (bar = 0; bar < N; bar++) {
+      for (const g of varList) if (g.init && g.hist[bar] === undefined) g.hist[bar] = g.hist[bar - 1];
+      if (R.broker) R.broker.open(bar);
+      try { execBlock(ast); }
+      catch (x) { if (x === BRK || x === CNT) throw new PineError('break / continue はループの中でだけ使えます', null); throw x; }
+      if (R.broker) R.broker.close(bar);
+    }
+    R.ms = (typeof performance !== 'undefined' ? performance : Date).now() - t0;
+    return R;
+  }
+
+  const FUNCS = {
+    '宣言': ['indicator', 'strategy'],
+    '描画': ['plot', 'plotshape', 'plotchar', 'plotarrow', 'hline', 'bgcolor', 'barcolor'],
+    '入力': ['input', 'input.int', 'input.float', 'input.bool', 'input.string', 'input.source'],
+    'テクニカル': ['ta.sma', 'ta.ema', 'ta.rma', 'ta.wma', 'ta.hma', 'ta.vwma', 'ta.rsi', 'ta.macd', 'ta.bb', 'ta.bbw', 'ta.kc', 'ta.atr', 'ta.tr', 'ta.stdev', 'ta.dev', 'ta.stoch', 'ta.cci', 'ta.mfi', 'ta.wpr', 'ta.dmi', 'ta.supertrend', 'ta.sar', 'ta.highest', 'ta.lowest', 'ta.crossover', 'ta.crossunder', 'ta.cross', 'ta.change', 'ta.mom', 'ta.roc', 'ta.barssince', 'ta.valuewhen', 'ta.pivothigh', 'ta.pivotlow', 'ta.linreg', 'ta.correlation', 'ta.rising', 'ta.falling', 'ta.cum'],
+    '戦略': ['strategy.entry', 'strategy.exit', 'strategy.close', 'strategy.close_all', 'strategy.cancel', 'strategy.position_size', 'strategy.position_avg_price'],
+    'その他': ['nz', 'na', 'math.*', 'color.new', 'color.rgb', 'color.from_gradient', 'str.tostring', 'if / else', 'for / while', 'var', '関数定義 =>', '[a, b] = タプル'],
+  };
+  return { parse, run, PineError, FUNCS, SOURCES };
+})();
+/*ENGINE-END*/
+
+/*DATA-START*/
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function genSample(seed, p0, vol, digits) {
+  const rnd = mulberry32(seed);
+  const gauss = () => { let u = 0; while (!u) u = rnd(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rnd()); };
+  const start = Date.UTC(2026, 6, 12, 22, 0) / 1000, end = Date.UTC(2026, 9, 16, 4, 45) / 1000;
+  const t = [], o = [], h = [], l = [], c = [], v = [];
+  let px = p0, mu = 0, left = 0;
+  const f = 10 ** digits, r = x => Math.round(x * f) / f;
+  const k15 = 15, sq = Math.sqrt(1 / k15);
+  for (let ts = start; ts <= end; ts += 60) {
+    const d = new Date(ts * 1000), wd = d.getUTCDay(), hr = d.getUTCHours();
+    if (wd === 6 || (wd === 0 && hr < 22) || (wd === 5 && hr >= 21)) continue;
+    if (left <= 0) { mu = gauss() * vol * 0.08 / k15; left = 96 * k15 * (1 + rnd() * 4); }
+    left--;
+    const sess = hr < 7 ? 0.75 : hr < 12 ? 1.25 : hr < 17 ? 1.4 : hr >= 22 ? 0.85 : 0.6;
+    const sig = vol * sq * sess * (0.7 + 0.6 * rnd());
+    const drift = mu - 0.0015 / k15 * Math.log(px / p0);
+    const open = px; let hi = open, lo = open, x = open;
+    for (let k = 0; k < 2; k++) { x = x * Math.exp(drift / 2 + sig * 0.7071 * gauss()); if (x > hi) hi = x; if (x < lo) lo = x; }
+    hi += Math.abs(gauss()) * sig * open * 0.3; lo -= Math.abs(gauss()) * sig * open * 0.3;
+    const oo = r(open), cc = r(x);
+    t.push(ts); o.push(oo); c.push(cc); h.push(Math.max(r(hi), oo, cc)); l.push(Math.min(r(lo), oo, cc));
+    v.push(Math.round(12 * sess * (1 + Math.abs(gauss())) * (0.6 + rnd())));
+    px = x;
+  }
+  return { t, o, h, l, c, v };
+}
+function resample(B, tf, baseSec) {
+  if (tf === baseSec) return B;
+  const off = tf >= 14400 ? 7200 : 0;
+  const R = { t: [], o: [], h: [], l: [], c: [], v: [] }; let cur = null, k = -1;
+  for (let i = 0; i < B.t.length; i++) {
+    const b = Math.floor((B.t[i] + off) / tf) * tf - off;
+    if (b !== cur) { cur = b; k++; R.t.push(b); R.o.push(B.o[i]); R.h.push(B.h[i]); R.l.push(B.l[i]); R.c.push(B.c[i]); R.v.push(B.v[i]); }
+    else { if (B.h[i] > R.h[k]) R.h[k] = B.h[i]; if (B.l[i] < R.l[k]) R.l[k] = B.l[i]; R.c[k] = B.c[i]; R.v[k] += B.v[i]; }
+  }
+  return R;
+}
+function parseCSV(text, tzH) {
+  const rows = []; let maxDec = 0;
+  for (const ln of text.split(/\r?\n/)) {
+    const s = ln.trim(); if (!s) continue;
+    const parts = s.split(/[,;\t]/).map(x => x.trim().replace(/^"|"$/g, ''));
+    let t = null, k = 0; const p0 = parts[0];
+    if (/^\d{9,13}(\.\d+)?$/.test(p0)) { let x = +p0; if (x > 1e11) x /= 1000; t = x; k = 1; }
+    else {
+      let m = /^(\d{4})[.\-\/](\d{1,2})[.\-\/](\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/.exec(p0);
+      if (m) {
+        let hh = m[4], mm = m[5], ss = m[6]; k = 1;
+        if (hh === undefined && parts[1] && /^\d{1,2}:\d{2}(:\d{2})?$/.test(parts[1])) { [hh, mm, ss] = parts[1].split(':'); k = 2; }
+        if (/(Z|[+-]\d{2}:?\d{2})$/.test(p0) && !isNaN(Date.parse(p0))) t = Date.parse(p0) / 1000;
+        else t = Date.UTC(+m[1], +m[2] - 1, +m[3], +(hh || 0), +(mm || 0), +(ss || 0)) / 1000 - tzH * 3600;
+      } else {
+        m = /^(\d{4})(\d{2})(\d{2})(?:\s+(\d{2})(\d{2})(\d{2})?)?$/.exec(p0);
+        if (m) { t = Date.UTC(+m[1], +m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0)) / 1000 - tzH * 3600; k = 1; }
+      }
+    }
+    if (t === null || !isFinite(t)) continue;
+    const raw = parts.slice(k, k + 5);
+    const nums = raw.map(Number);
+    if (nums.length < 4 || nums.slice(0, 4).some(x => !isFinite(x))) continue;
+    for (const r of raw.slice(0, 4)) { const d = (r.split('.')[1] || '').length; if (d > maxDec) maxDec = d; }
+    const [o, h, l, c] = nums;
+    rows.push({ t, o, h: Math.max(h, o, c), l: Math.min(l, o, c), c, v: isFinite(nums[4]) ? nums[4] : 0 });
+  }
+  rows.sort((a, b) => a.t - b.t);
+  const B = { t: [], o: [], h: [], l: [], c: [], v: [] };
+  for (const r of rows) { if (B.t.length && B.t[B.t.length - 1] === r.t) continue; B.t.push(r.t); B.o.push(r.o); B.h.push(r.h); B.l.push(r.l); B.c.push(r.c); B.v.push(r.v); }
+  const diffs = {}; for (let i = 1; i < Math.min(B.t.length, 800); i++) { const d = B.t[i] - B.t[i - 1]; if (d > 0) diffs[d] = (diffs[d] || 0) + 1; }
+  let baseSec = 0, best = 0; for (const d in diffs) if (diffs[d] > best) { best = diffs[d]; baseSec = +d; }
+  return { bars: B, baseSec, digits: Math.min(Math.max(maxDec, 2), 6) };
+}
+/*DATA-END*/
+
+/*PRESETS-START*/
+const PRESETS = [
+{ key: 'macross', on: true, code: `//@version=5
+strategy("移動平均クロス戦略", overlay=true)
+// 初期資金と数量は銘柄に合わせて自動（FX：1万通貨、金：10オンス）
+
+// パラメーター（「設定」タブで変更できます）
+fastLen = input.int(9, "短期SMA", minval=1)
+slowLen = input.int(26, "長期SMA", minval=1)
+slPips  = input.float(30, "損切り（pips）", minval=1)
+tpPips  = input.float(60, "利確（pips）", minval=1)
+
+fast = ta.sma(close, fastLen)
+slow = ta.sma(close, slowLen)
+plot(fast, "短期SMA", color=color.orange, linewidth=2)
+plot(slow, "長期SMA", color=color.blue, linewidth=2)
+
+// ゴールデンクロスで買い、デッドクロスで売り（ドテン）
+if ta.crossover(fast, slow)
+    strategy.entry("Long", strategy.long)
+if ta.crossunder(fast, slow)
+    strategy.entry("Short", strategy.short)
+
+// 1pips = 10ティック（3桁/5桁表示の業者と同じ）
+strategy.exit("XL", "Long", loss=slPips * 10, profit=tpPips * 10)
+strategy.exit("XS", "Short", loss=slPips * 10, profit=tpPips * 10)
+` },
+{ key: 'rsi', on: true, code: `//@version=5
+indicator("RSI", overlay=false)
+
+len   = input.int(14, "期間", minval=1)
+src   = input.source(close, "ソース")
+upper = input.int(70, "買われすぎ")
+lower = input.int(30, "売られすぎ")
+
+r = ta.rsi(src, len)
+plot(r, "RSI", color=color.purple, linewidth=2)
+hline(upper, "上限", color=color.red)
+hline(50, "中央", color=color.gray)
+hline(lower, "下限", color=color.green)
+bgcolor(r > upper ? color.new(color.red, 88) : r < lower ? color.new(color.green, 88) : na)
+` },
+{ key: 'bb', on: false, code: `//@version=5
+indicator("ボリンジャーバンド", overlay=true)
+
+len  = input.int(20, "期間", minval=1)
+mult = input.float(2.0, "σの倍率", step=0.1)
+
+[mid, up, lo] = ta.bb(close, len, mult)
+plot(mid, "中心線", color=color.orange)
+plot(up, "+σ", color=color.teal)
+plot(lo, "-σ", color=color.teal)
+
+plotshape(ta.crossunder(close, lo), "-σ割れ", shape.triangleup, location.belowbar, color.teal)
+plotshape(ta.crossover(close, up), "+σ超え", shape.triangledown, location.abovebar, color.red)
+` },
+{ key: 'macd', on: false, code: `//@version=5
+indicator("MACD", overlay=false)
+
+fastLen = input.int(12, "短期EMA")
+slowLen = input.int(26, "長期EMA")
+sigLen  = input.int(9, "シグナル")
+
+[m, sig, hist] = ta.macd(close, fastLen, slowLen, sigLen)
+histColor = hist >= 0 ? (hist > hist[1] ? #26A69A : #B2DFDB) : (hist < hist[1] ? #FF5252 : #FFCDD2)
+plot(hist, "ヒストグラム", color=histColor, style=plot.style_columns)
+plot(m, "MACD", color=color.blue)
+plot(sig, "シグナル", color=color.orange)
+hline(0, "ゼロ", color=color.gray)
+` },
+{ key: 'st', on: false, code: `//@version=5
+indicator("スーパートレンド", overlay=true)
+
+factor = input.float(3.0, "ATR倍率", step=0.1)
+atrLen = input.int(10, "ATR期間")
+
+[st, dir] = ta.supertrend(factor, atrLen)
+plot(dir < 0 ? st : na, "上昇トレンド", color=color.green, linewidth=2, style=plot.style_linebr)
+plot(dir > 0 ? st : na, "下降トレンド", color=color.red, linewidth=2, style=plot.style_linebr)
+
+plotshape(dir < 0 and dir[1] > 0, "買い転換", shape.labelup, location.belowbar, color.green, text="買")
+plotshape(dir > 0 and dir[1] < 0, "売り転換", shape.labeldown, location.abovebar, color.red, text="売")
+` },
+{ key: 'rsistrat', on: false, code: `//@version=5
+strategy("RSI逆張り戦略", overlay=true)
+
+len  = input.int(14, "RSI期間")
+buyLv  = input.int(30, "買いライン")
+sellLv = input.int(70, "売りライン")
+useTime = input.bool(true, "東京時間（9〜15時）だけ取引")
+
+r = ta.rsi(close, len)
+inTime = not useTime or (hour >= 9 and hour < 15)
+
+if inTime and ta.crossover(r, buyLv)
+    strategy.entry("買い", strategy.long)
+if inTime and ta.crossunder(r, sellLv)
+    strategy.entry("売り", strategy.short)
+
+// RSIが50を回復したら決済
+if strategy.position_size > 0 and r > 50
+    strategy.close("買い")
+if strategy.position_size < 0 and r < 50
+    strategy.close("売り")
+` },
+];
+const NEW_TEMPLATE = `//@version=5
+indicator("マイインジケーター", overlay=true)
+
+len = input.int(20, "期間", minval=1)
+e = ta.ema(close, len)
+plot(e, "EMA", color=color.orange, linewidth=2)
+`;
+/*PRESETS-END*/
+
+
+// ================= app =================
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const JST = 9 * 3600;
+const TF_ALL = [[60, '1分'], [180, '3分'], [300, '5分'], [600, '10分'], [900, '15分'], [1800, '30分'], [3600, '1時間'], [14400, '4時間'], [86400, '日足']];
+const tfLabel = s => (TF_ALL.find(x => x[0] === s) || [0, s / 60 + '分'])[1];
+const KEY = 'pinefx.v1', DKEY = 'pinefx.data.v1';
+const uid = () => Math.random().toString(36).slice(2, 9);
+
+const S = { datasets: [], dsId: 'USDJPY', tf: 3600, scripts: [], selId: null, tab: 'ind', panel: 'half', spread: 0.3, tz: 0, results: new Map(), D: null, edFor: null, ranMsg: null };
+
+function pairMeta(name) {
+  const m = /^([A-Z]{3})([A-Z]{3})$/.exec(name);
+  return m ? { base: m[1], quote: m[2], label: m[1] + '/' + m[2] } : { base: '', quote: '', label: name };
+}
+function addSample(name, seed, p0, vol, digits, pipOverride) {
+  const pm = pairMeta(name), pip = pipOverride || (digits === 3 || digits === 2 ? 0.01 : 0.0001);
+  S.datasets.push({ id: name, name, ...pm, digits, pip, mintick: pip / 10, baseSec: 60, sample: true, gen: () => genSample(seed, p0, vol, digits) });
+}
+addSample('USDJPY', 11, 148.30, 0.00065, 3);
+addSample('EURUSD', 23, 1.1640, 0.00055, 5);
+addSample('GBPJPY', 37, 197.80, 0.00080, 3);
+addSample('XAUUSD', 53, 4120.00, 0.0013, 2, 0.1);
+
+function persist() {
+  try {
+    localStorage.setItem(KEY, JSON.stringify({ scripts: S.scripts.map(s => ({ id: s.id, code: s.code, enabled: s.enabled, inputs: s.inputs, name: s.name, kind: s.kind, overlay: s.overlay })), selId: S.selId, dsId: S.dsId, tf: S.tf, spread: S.spread, tz: S.tz, tab: S.tab, panel: S.panel }));
+  } catch (e) {}
+}
+function persistData() {
+  try {
+    const own = S.datasets.filter(d => !d.sample).map(d => ({ id: d.id, name: d.name, label: d.label, base: d.base, quote: d.quote, digits: d.digits, pip: d.pip, mintick: d.mintick, baseSec: d.baseSec, bars: d.bars }));
+    const s = JSON.stringify(own);
+    if (s.length > 4.5e6) return false;
+    localStorage.setItem(DKEY, s); return true;
+  } catch (e) { return false; }
+}
+function restore() {
+  let st = null;
+  try { st = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) {}
+  try { const own = JSON.parse(localStorage.getItem(DKEY) || '[]'); for (const d of own) S.datasets.push({ ...d, sample: false }); } catch (e) {}
+  if (st && Array.isArray(st.scripts) && st.scripts.length) {
+    S.scripts = st.scripts.map(s => ({ ...s, inputs: s.inputs || {} }));
+    Object.assign(S, { selId: st.selId, dsId: st.dsId, tf: st.tf, spread: st.spread ?? 0.3, tz: st.tz ?? 0, tab: st.tab || 'ind', panel: st.panel || 'half' });
+  } else {
+    S.scripts = PRESETS.map(p => ({ id: uid(), code: p.code, enabled: p.on, inputs: {} }));
+    S.selId = S.scripts[0].id;
+  }
+  if (!S.datasets.find(d => d.id === S.dsId)) S.dsId = S.datasets[0].id;
+  if (!S.scripts.find(s => s.id === S.selId)) S.selId = S.scripts[0] && S.scripts[0].id;
+  // fill names for presets
+  for (const s of S.scripts) if (!s.name) { const m = /(?:indicator|strategy|study)\(\s*["']([^"']+)/.exec(s.code); s.name = m ? m[1] : 'スクリプト'; s.kind = /strategy\(/.test(s.code) ? 'strategy' : 'indicator'; s.overlay = /overlay\s*=\s*true/.test(s.code); }
+}
+
+const MAX_BARS = 20000; // 1本ずつ計算するため、短い足は直近2万本に絞る
+const curDS = () => S.datasets.find(d => d.id === S.dsId);
+const cache = new Map();
+function dataFor(ds, tf) {
+  const k = ds.id + '|' + tf;
+  if (cache.has(k)) return cache.get(k);
+  if (!ds.bars) ds.bars = ds.gen();
+  let B = resample(ds.bars, tf, ds.baseSec);
+  if (B.t.length > MAX_BARS) { const s = B.t.length - MAX_BARS; B = { t: B.t.slice(s), o: B.o.slice(s), h: B.h.slice(s), l: B.l.slice(s), c: B.c.slice(s), v: B.v.slice(s) }; }
+  const isGold = /^XA[UG]/.test(ds.name);
+  const D = { ...B, n: B.t.length, defQty: isGold ? 10 : 10000, defCap: ds.quote === 'JPY' ? 1000000 : 10000, digits: ds.digits, pip: ds.pip, mintick: ds.mintick, tfSec: tf, name: ds.name, base: ds.base, quote: ds.quote };
+  cache.set(k, D); return D;
+}
+function tfsFor(ds) { return TF_ALL.map(x => x[0]).filter(s => s >= ds.baseSec && s % ds.baseSec === 0); }
+
+const astCache = new Map();
+function parseCached(code) {
+  if (astCache.has(code)) return astCache.get(code);
+  const ast = PINE.parse(code); astCache.set(code, ast);
+  if (astCache.size > 40) astCache.delete(astCache.keys().next().value);
+  return ast;
+}
+
+function runScript(sc) {
+  try {
+    const out = PINE.run(parseCached(sc.code), S.D, { inputs: sc.inputs || {}, spreadPips: S.spread });
+    sc.name = out.meta.title; sc.kind = out.meta.kind; sc.overlay = out.meta.overlay;
+    S.results.set(sc.id, { ok: true, out });
+  } catch (err) {
+    if (!(err instanceof PINE.PineError)) console.error(err);
+    S.results.set(sc.id, { ok: false, err: { msg: err instanceof PINE.PineError ? err.message : '内部エラー：' + err.message, line: err.line } });
+  }
+}
+function recompute() {
+  S.D = dataFor(curDS(), S.tf);
+  S.results.clear();
+  for (const sc of S.scripts) if (sc.enabled || sc.id === S.selId) runScript(sc);
+}
+function refresh(o = {}) { const ds = curDS(); if (!ds.bars) ds.bars = ds.gen(); renderHeader(); recompute(); drawCharts(o); renderAll(); persist(); }
+
+// ================= charts =================
+const CV = { charts: [], legends: [], rkey: null };
+const tok = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function withAlpha(c, a) {
+  const m = /rgba?\(([^)]+)\)/.exec(c);
+  if (m) { const p = m[1].split(',').map(x => x.trim()); return `rgba(${p[0]},${p[1]},${p[2]},${a})`; }
+  if (/^#[0-9a-f]{6}/i.test(c)) { const r = parseInt(c.slice(1, 3), 16), g = parseInt(c.slice(3, 5), 16), b = parseInt(c.slice(5, 7), 16); return `rgba(${r},${g},${b},${a})`; }
+  return c;
+}
+function chartOpts(showTime) {
+  return {
+    layout: { background: { type: 'solid', color: tok('--surface') }, textColor: tok('--muted'), fontFamily: "'IBM Plex Mono', ui-monospace, Menlo, monospace", fontSize: 11 },
+    grid: { vertLines: { color: tok('--grid') }, horzLines: { color: tok('--grid') } },
+    rightPriceScale: { borderColor: tok('--line'), minimumWidth: 64, scaleMargins: { top: 0.12, bottom: 0.08 } },
+    timeScale: { borderColor: tok('--line'), timeVisible: S.tf < 86400, secondsVisible: false, rightOffset: 6, barSpacing: 7, visible: showTime, minBarSpacing: 0.6 },
+    crosshair: { mode: 0, vertLine: { color: tok('--faint'), labelBackgroundColor: tok('--ink') }, horzLine: { color: tok('--faint'), labelBackgroundColor: tok('--ink') } },
+    localization: { locale: 'ja-JP', dateFormat: 'yyyy/MM/dd' },
+    handleScale: { axisPressedMouseMove: { time: true, price: true }, pinch: true, mouseWheel: true },
+    handleScroll: { horzTouchDrag: true, vertTouchDrag: false, mouseWheel: true, pressedMouseMove: true },
+    kineticScroll: { touch: true, mouse: false },
+  };
+}
+const PALETTE = ['#2962FF', '#FF9800', '#9C27B0', '#00897B', '#E91E63', '#795548'];
+function paneFormat(plots) {
+  const vals = [];
+  for (const p of plots) for (let i = p.values.length - 1; i >= 0 && vals.length < 400; i -= 3) if (p.values[i] === p.values[i]) vals.push(Math.abs(p.values[i]));
+  vals.sort((a, b) => a - b); const med = vals.length ? vals[vals.length >> 1] : 1;
+  const prec = med === 0 ? 2 : med < 0.01 ? 5 : med < 1 ? 4 : med < 100 ? 2 : 1;
+  return { type: 'price', precision: prec, minMove: 1 / 10 ** prec };
+}
+
+function drawCharts({ resetRange = false } = {}) {
+  const host = $('#chartHost'), D = S.D, ds = curDS();
+  const rkey = ds.id + '|' + S.tf;
+  let prev = null;
+  if (CV.charts.length && !resetRange && CV.rkey === rkey) { try { prev = CV.charts[0].chart.timeScale().getVisibleLogicalRange(); } catch (e) {} }
+  CV.charts.forEach(c => c.chart.remove()); CV.charts = []; host.innerHTML = '';
+  if (!window.LightweightCharts) { host.innerHTML = '<div class="chart-empty">チャートの部品を読み込めませんでした。通信状態を確認して再読み込みしてください。</div>'; return; }
+  CV.rkey = rkey;
+
+  const runs = S.scripts.filter(s => s.enabled).map(sc => ({ sc, r: S.results.get(sc.id) })).filter(x => x.r && x.r.ok).map(x => ({ sc: x.sc, out: x.r.out }));
+  const overlay = runs.filter(x => x.out.meta.overlay);
+  const panes = runs.filter(x => !x.out.meta.overlay && (x.out.plots.length || x.out.hlines.length));
+  const times = new Array(D.n); for (let i = 0; i < D.n; i++) times[i] = D.t[i] + JST;
+  const up = tok('--up'), down = tok('--down');
+  const priceFmt = { type: 'price', precision: ds.digits, minMove: 1 / 10 ** ds.digits };
+
+  const mkPane = (isLast) => {
+    const el = document.createElement('div'); el.className = 'pane';
+    const lg = document.createElement('div'); lg.className = 'legend'; el.appendChild(lg);
+    host.appendChild(el);
+    const chart = LightweightCharts.createChart(el, { ...chartOpts(isLast), width: host.clientWidth || 300, height: 100 });
+    return { el, lg, chart, groups: [] };
+  };
+  const addBg = (chart, bgArrs) => {
+    const has = bgArrs.some(a => a.some(Boolean)); if (!has) return;
+    const s = chart.addHistogramSeries({ priceScaleId: 'bg', priceLineVisible: false, lastValueVisible: false, base: 0 });
+    chart.priceScale('bg').applyOptions({ scaleMargins: { top: 0, bottom: 0 }, visible: false });
+    s.setData(times.map((t, i) => { let c = null; for (const a of bgArrs) if (a[i]) c = a[i]; return c ? { time: t, value: 1, color: c } : { time: t }; }));
+  };
+  const addPlot = (chart, p, ci, fmt) => {
+    if (p.hidden) return null;
+    const first = p.hasColor ? p.colors.find(c => c && c !== 'rgba(0,0,0,0)') : null;
+    const base = first || PALETTE[ci % PALETTE.length];
+    const common = { priceLineVisible: false, lastValueVisible: true, priceFormat: fmt, title: '' };
+    const lw = Math.max(1, Math.min(4, Math.round(p.lw)));
+    let s, data;
+    const col = i => (p.hasColor && p.colors[i]) || base;
+    if (p.style === 'hist' || p.style === 'columns') {
+      s = chart.addHistogramSeries({ ...common, color: base, base: 0 });
+      data = times.map((t, i) => p.values[i] === p.values[i] ? { time: t, value: p.values[i], color: col(i) } : { time: t });
+    } else if (p.style === 'area') {
+      s = chart.addAreaSeries({ ...common, lineColor: base, topColor: withAlpha(base, 0.28), bottomColor: withAlpha(base, 0.02), lineWidth: lw });
+      data = times.map((t, i) => p.values[i] === p.values[i] ? { time: t, value: p.values[i] } : { time: t });
+    } else {
+      s = chart.addLineSeries({ ...common, color: base, lineWidth: lw, lineType: p.style === 'step' ? 1 : 0, lineVisible: p.style !== 'circles', pointMarkersVisible: p.style === 'circles', pointMarkersRadius: 2, crosshairMarkerRadius: 3 });
+      data = times.map((t, i) => p.values[i] === p.values[i] ? (p.hasColor ? { time: t, value: p.values[i], color: col(i) } : { time: t, value: p.values[i] }) : { time: t });
+    }
+    s.setData(data);
+    return { s, color: base };
+  };
+
+  // main
+  const main = mkPane(panes.length === 0);
+  CV.charts.push(main);
+  addBg(main.chart, overlay.map(x => x.out.bg));
+  const candle = main.chart.addCandlestickSeries({ upColor: up, downColor: down, wickUpColor: up, wickDownColor: down, borderVisible: false, priceFormat: priceFmt, priceLineColor: tok('--faint') });
+  const barCols = overlay.concat(panes).map(x => x.out.barColors).filter(a => a.some(Boolean));
+  candle.setData(times.map((t, i) => {
+    const d = { time: t, open: D.o[i], high: D.h[i], low: D.l[i], close: D.c[i] };
+    let c = null; for (const a of barCols) if (a[i]) c = a[i];
+    if (c) { d.color = c; d.wickColor = c; }
+    return d;
+  }));
+  let ci = 0;
+  for (const x of overlay) {
+    const g = { name: x.out.meta.title, items: [] };
+    for (const p of x.out.plots) { const r = addPlot(main.chart, p, ci++, priceFmt); if (r) g.items.push({ color: r.color, vals: p.values, colors: p.hasColor ? p.colors : null, digits: ds.digits }); }
+    for (const h of x.out.hlines) if (h.price === h.price) candle.createPriceLine({ price: h.price, color: h.color, lineWidth: h.lw, lineStyle: h.style, axisLabelVisible: true, title: h.title });
+    main.groups.push(g);
+  }
+  // markers
+  const marks = [];
+  for (const x of runs) {
+    for (const m of x.out.shapes) marks.push({ time: times[m.bar], position: m.pos, color: m.color, shape: m.shape, text: m.text, size: m.size });
+    const b = x.out.broker;
+    if (b) for (const m of b.marks) {
+      if (m.kind === 'entry') marks.push({ time: times[m.bar], position: m.dir > 0 ? 'belowBar' : 'aboveBar', color: m.dir > 0 ? up : down, shape: m.dir > 0 ? 'arrowUp' : 'arrowDown', text: m.text, size: 1 });
+      else marks.push({ time: times[m.bar], position: m.dir > 0 ? 'aboveBar' : 'belowBar', color: tok('--muted'), shape: 'circle', text: '', size: 0.6 });
+    }
+  }
+  marks.sort((a, b) => a.time - b.time);
+  candle.setMarkers(marks.filter(m => m.time !== undefined));
+  main.candle = candle;
+
+  // panes
+  panes.forEach((x, k) => {
+    const p = mkPane(k === panes.length - 1);
+    CV.charts.push(p);
+    addBg(p.chart, [x.out.bg]);
+    const fmt = x.out.meta.precision != null ? { type: 'price', precision: x.out.meta.precision, minMove: 1 / 10 ** x.out.meta.precision } : paneFormat(x.out.plots);
+    const g = { name: x.out.meta.title, items: [] };
+    let firstS = null;
+    x.out.plots.forEach((pl, j) => { const r = addPlot(p.chart, pl, j, fmt); if (r) { firstS = firstS || r.s; g.items.push({ color: r.color, vals: pl.values, colors: pl.hasColor ? pl.colors : null, digits: fmt.precision }); } });
+    if (!firstS && x.out.hlines.length) { firstS = p.chart.addLineSeries({ color: 'rgba(0,0,0,0)', priceLineVisible: false, lastValueVisible: false }); firstS.setData(times.map(t => ({ time: t, value: x.out.hlines[0].price }))); }
+    for (const h of x.out.hlines) if (h.price === h.price && firstS) firstS.createPriceLine({ price: h.price, color: h.color, lineWidth: h.lw, lineStyle: h.style, axisLabelVisible: true, title: '' });
+    p.groups.push(g);
+  });
+
+  layoutCharts();
+  const ts0 = main.chart.timeScale();
+  if (prev) ts0.setVisibleLogicalRange(prev);
+  else ts0.setVisibleLogicalRange({ from: Math.max(0, D.n - 140), to: D.n + 5 });
+  // sync
+  let syncing = false;
+  CV.charts.forEach(c => c.chart.timeScale().subscribeVisibleLogicalRangeChange(r => {
+    if (syncing || !r) return; syncing = true;
+    CV.charts.forEach(o => { if (o !== c) o.chart.timeScale().setVisibleLogicalRange(r); });
+    syncing = false;
+  }));
+  CV.charts.forEach(c => c.chart.subscribeCrosshairMove(p => {
+    const idx = p && p.point && p.logical != null ? Math.round(p.logical) : null;
+    updateLegends(idx);
+  }));
+  updateLegends(null);
+}
+function layoutCharts() {
+  const host = $('#chartHost'); if (!CV.charts.length) return;
+  const W = host.clientWidth, H = host.clientHeight; if (!W || !H) return;
+  const n = CV.charts.length - 1;
+  const ph = n ? Math.floor(Math.min(H * (n === 1 ? 0.3 : 0.48) / n, 190)) : 0;
+  CV.charts.forEach((c, i) => {
+    const h = i === 0 ? H - ph * n - n : ph;
+    c.el.style.height = h + 'px';
+    c.chart.resize(W, Math.max(40, h));
+  });
+}
+function fmtNum(v, d) { return v === v && v !== undefined ? v.toFixed(d) : '—'; }
+function updateLegends(idx) {
+  const D = S.D, ds = curDS(); if (!D || !CV.charts.length) return;
+  let i = idx == null ? D.n - 1 : Math.max(0, Math.min(D.n - 1, idx));
+  const d = ds.digits;
+  const chg = D.c[i] - (i ? D.c[i - 1] : D.o[i]);
+  const cls = chg >= 0 ? 'up' : 'down';
+  const dt = new Date((D.t[i] + JST) * 1000);
+  const when = `${dt.getUTCMonth() + 1}/${dt.getUTCDate()}` + (S.tf < 86400 ? ` ${String(dt.getUTCHours()).padStart(2, '0')}:${String(dt.getUTCMinutes()).padStart(2, '0')}` : '');
+  const gRow = g => `<div class="lg-row"><span class="lg-name">${esc(g.name)}</span>${g.items.map(it => { const c = (it.colors && it.colors[i] && it.colors[i] !== 'rgba(0,0,0,0)') ? it.colors[i] : it.color; return `<span style="color:${c}">${fmtNum(it.vals[i], it.digits)}</span>`; }).join('')}</div>`;
+  CV.charts.forEach((c, k) => {
+    if (k === 0) {
+      c.lg.innerHTML = `<div class="lg-row"><b>${esc(ds.label)}</b><span>${tfLabel(S.tf)}</span>${ds.sample ? '<span class="tag">サンプル（架空）</span>' : ''}<span class="lg-k">${when}</span></div>
+        <div class="lg-row"><span><span class="lg-k">始</span> ${D.o[i].toFixed(d)}</span><span><span class="lg-k">高</span> ${D.h[i].toFixed(d)}</span><span><span class="lg-k">安</span> ${D.l[i].toFixed(d)}</span><span><span class="lg-k">終</span> <span class="${cls}">${D.c[i].toFixed(d)}</span></span></div>` + c.groups.map(gRow).join('');
+    } else c.lg.innerHTML = c.groups.map(gRow).join('');
+  });
+}
+
+// ================= header =================
+function renderHeader() {
+  const sel = $('#pairSel'), ds = curDS();
+  sel.innerHTML = S.datasets.map(d => `<option value="${esc(d.id)}" ${d.id === S.dsId ? 'selected' : ''}>${esc(d.label)}</option>`).join('');
+  const tfs = tfsFor(ds); if (!tfs.includes(S.tf)) S.tf = tfs.includes(3600) ? 3600 : tfs[0];
+  $('#tfs').innerHTML = tfs.map(s => `<button class="tf" role="tab" data-tf="${s}" aria-selected="${s === S.tf}">${tfLabel(s)}</button>`).join('');
+  const B = ds.bars, n = B.t.length, last = B.c[n - 1];
+  let j = n - 1; while (j > 0 && B.t[j] > B.t[n - 1] - 86400) j--;
+  const ch = last - B.c[j], pct = ch / B.c[j] * 100;
+  $('#quote').innerHTML = `<div class="px">${last.toFixed(ds.digits)}</div><div class="chg ${ch >= 0 ? 'up' : 'down'}">${ch >= 0 ? '+' : ''}${(ch / ds.pip).toFixed(1)} pips（${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%）</div>`;
+}
+
+// ================= panel =================
+const SIZE_ICON = { half: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 14 6-6 6 6"/></svg>', full: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 10 6 6 6-6"/></svg>' };
+function setTab(t, fromTap) {
+  if (fromTap && t === S.tab && window.innerWidth < 960) S.panel = S.panel === 'closed' ? 'half' : 'closed';
+  else if (S.panel === 'closed') S.panel = 'half';
+  S.tab = t;
+  document.querySelectorAll('.tab').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
+  document.querySelectorAll('.pbody').forEach(p => p.classList.toggle('on', p.id === 'pb-' + t));
+  $('#app').dataset.panel = S.panel;
+  document.querySelectorAll('[data-size]').forEach(b => { b.innerHTML = S.panel === 'full' ? SIZE_ICON.full : SIZE_ICON.half; });
+  persist();
+  requestAnimationFrame(() => setTimeout(layoutCharts, 220));
+}
+function renderAll() { renderList(); renderEditor(); renderForm(); renderResults(); renderData(); renderTabDots(); }
+const sel = () => S.scripts.find(s => s.id === S.selId);
+function tagsOf(sc) { return (sc.kind === 'strategy' ? '戦略' : 'インジケーター') + ' · ' + (sc.overlay ? 'チャート上' : '別ペイン'); }
+
+function renderList() {
+  $('#slist').innerHTML = S.scripts.map(sc => {
+    const r = S.results.get(sc.id);
+    return `<div class="srow ${sc.id === S.selId ? 'sel' : ''}" data-id="${sc.id}">
+      <button class="sw" role="switch" aria-checked="${!!sc.enabled}" aria-label="${esc(sc.name)}を表示"></button>
+      <button class="sname" data-open="${sc.id}"><span class="n">${esc(sc.name)}</span><span class="m">${tagsOf(sc)}</span></button>
+      ${r && !r.ok ? '<span class="badge">エラー</span>' : '<span></span>'}</div>`;
+  }).join('') || '<div class="empty">スクリプトがありません。下から追加してください。</div>';
+  $('#chips').innerHTML = `<button class="chip" data-new="blank">＋ 新規スクリプト</button>` + PRESETS.map((p, i) => { const m = /\(\s*"([^"]+)"/.exec(p.code); return `<button class="chip" data-new="${i}">${esc(m ? m[1] : p.key)}</button>`; }).join('');
+}
+function renderTabDots() {
+  const r = S.results.get(S.selId);
+  const t = document.querySelector('.tab[data-tab="ed"]');
+  t.querySelector('.dot')?.remove();
+  if (r && !r.ok) t.insertAdjacentHTML('beforeend', '<span class="dot"></span>');
+}
+
+const KEYS = [['⇥', '    '], ['(', '('], [')', ')'], ['[', '['], [']', ']'], ['"', '"'], [',', ','], ['.', '.'], ['=', ' = '], [':=', ' := '], ['=>', ' => '], ['?', ' ? '], [':', ' : '], ['#', '#'], ['//', '// ']];
+function renderEditor() {
+  const sc = sel(); const ta = $('#code');
+  if (!sc) { $('#edTitle').textContent = 'エディタ'; ta.value = ''; return; }
+  $('#edTitle').textContent = sc.name;
+  if (S.edFor !== sc.id) { ta.value = sc.code; S.edFor = sc.id; gutter(); ta.scrollTop = 0; }
+  const r = S.results.get(sc.id); let h = '';
+  if (r && !r.ok) h += `<div class="msg err">${r.err.line ? `<button data-goto="${r.err.line}">${r.err.line}行目</button>：` : ''}${esc(r.err.msg)}</div>`;
+  else if (r && r.ok) {
+    for (const w of r.out.warnings) h += `<div class="msg warn">${esc(w)}</div>`;
+    if (S.ranMsg === sc.id) h += `<div class="msg ok">実行しました（${r.out.ms < 1 ? '1' : Math.round(r.out.ms)}ミリ秒 · ${S.D.n.toLocaleString()}本）${sc.enabled ? '' : ' — チャートに出すには「インジ」タブでオンにしてください'}</div>`;
+  }
+  if (ta.value !== sc.code) h += `<div class="msg warn">未実行の変更があります</div>`;
+  $('#edMsg').innerHTML = h;
+  gutter();
+}
+function gutter() {
+  const ta = $('#code'), n = ta.value.split('\n').length;
+  const r = S.results.get(S.selId); const el = r && !r.ok ? r.err.line : 0;
+  let s = ''; for (let i = 1; i <= n; i++) s += (i === el ? `<span class="e">${i}</span>` : i) + '\n';
+  $('#gutter').innerHTML = s;
+  $('#gutter').scrollTop = ta.scrollTop;
+}
+function insertText(t) {
+  const ta = $('#code'); const a = ta.selectionStart, b = ta.selectionEnd;
+  ta.setRangeText(t, a, b, 'end'); ta.dispatchEvent(new Event('input'));
+}
+function runEditor() {
+  const sc = sel(); if (!sc) return;
+  sc.code = $('#code').value;
+  S.ranMsg = sc.id;
+  refresh();
+}
+function gotoLine(n) {
+  const ta = $('#code'); const lines = ta.value.split('\n'); let pos = 0;
+  for (let i = 0; i < n - 1 && i < lines.length; i++) pos += lines[i].length + 1;
+  ta.focus(); ta.setSelectionRange(pos, pos + (lines[n - 1] || '').length);
+  ta.scrollTop = Math.max(0, (n - 3) * parseFloat(getComputedStyle(ta).lineHeight));
+}
+
+function renderForm() {
+  const sc = sel(); const r = sc && S.results.get(sc.id); const f = $('#form');
+  $('#setTitle').textContent = sc ? sc.name + ' の設定' : '設定';
+  if (!r) { f.innerHTML = '<div class="empty">スクリプトを選んでください。</div>'; return; }
+  if (!r.ok) { f.innerHTML = '<div class="empty">スクリプトにエラーがあるため設定を表示できません。<br>「エディタ」タブで修正してください。</div>'; return; }
+  const ins = r.out.inputs;
+  if (!ins.length) { f.innerHTML = '<div class="empty"><b>設定項目がありません</b><br><code>input.int(14, "期間")</code> のように書くと、ここで値を変えられます。</div>'; return; }
+  f.innerHTML = ins.map((x, i) => {
+    const id = 'in_' + i; let ctl = '';
+    const changed = JSON.stringify(x.value) !== JSON.stringify(x.def);
+    if (x.type === 'int' || x.type === 'float') {
+      const step = x.step || (x.type === 'int' ? 1 : (Math.abs(x.def) < 5 ? 0.1 : 1));
+      ctl = `<div class="num"><button data-step="-1" data-k="${i}" aria-label="減らす">−</button><input id="${id}" data-k="${i}" type="number" inputmode="decimal" step="${step}" ${x.min !== undefined ? `min="${x.min}"` : ''} ${x.max !== undefined ? `max="${x.max}"` : ''} value="${x.value}"><button data-step="1" data-k="${i}" aria-label="増やす">＋</button></div>`;
+    } else if (x.type === 'bool') ctl = `<button class="sw" id="${id}" role="switch" data-k="${i}" aria-checked="${x.value}"></button>`;
+    else if (x.type === 'source') ctl = `<select class="dd" id="${id}" data-k="${i}">${PINE.SOURCES.map(s => `<option ${s === x.value ? 'selected' : ''}>${s}</option>`).join('')}</select>`;
+    else if (x.options) ctl = `<select class="dd" id="${id}" data-k="${i}">${x.options.map(s => `<option ${String(s) === String(x.value) ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select>`;
+    else if (x.type === 'color') ctl = `<span style="display:inline-block;width:28px;height:20px;border-radius:5px;background:${x.value};border:1px solid var(--line)"></span>`;
+    else ctl = `<input class="txt" id="${id}" data-k="${i}" value="${esc(x.value)}">`;
+    return `<div class="frow"><label for="${id}">${esc(x.title)}<span class="def">初期値 ${esc(String(x.def))}${changed ? ' · 変更中' : ''}</span></label>${ctl}</div>`;
+  }).join('');
+}
+let inTimer = null;
+function setInput(i, v, now) {
+  const sc = sel(); const r = S.results.get(sc.id); const x = r.out.inputs[i];
+  sc.inputs = sc.inputs || {}; sc.inputs[x.key] = v;
+  clearTimeout(inTimer);
+  const go = () => { refresh(); };
+  if (now) go(); else inTimer = setTimeout(go, 350);
+}
+
+function fmtMoney(v, q) {
+  const d = q === 'JPY' ? 0 : 2;
+  return (v >= 0 ? '+' : '−') + Math.abs(v).toLocaleString('ja-JP', { minimumFractionDigits: d, maximumFractionDigits: d });
+}
+function stats(b) {
+  const T = b.trades, n = T.length;
+  const wins = T.filter(t => t.pnl > 0), gp = wins.reduce((a, t) => a + t.pnl, 0), gl = -T.filter(t => t.pnl < 0).reduce((a, t) => a + t.pnl, 0);
+  let peak = -Infinity, mdd = 0, mddp = 0;
+  for (const e of b.eq) { if (e !== e) continue; if (e > peak) peak = e; const dd = peak - e; if (dd > mdd) { mdd = dd; mddp = dd / peak * 100; } }
+  const pips = T.reduce((a, t) => a + t.pips, 0);
+  return { n, win: n ? wins.length / n * 100 : NaN, net: b.realized, pf: gl ? gp / gl : (gp ? Infinity : NaN), mdd, mddp, pips, avg: n ? pips / n : NaN, ret: b.realized / b.cap * 100, open: b.size ? { dir: Math.sign(b.size), unreal: b.unreal(S.D.n - 1), ep: b.price, eb: b.ebar, id: b.eid } : null };
+}
+function fmtT(k) { const d = new Date((S.D.t[k] + JST) * 1000); return `${d.getUTCMonth() + 1}/${d.getUTCDate()} ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`; }
+function renderResults() {
+  const box = $('#resBody'); const ds = curDS();
+  let sc = sel(); if (!(sc && sc.kind === 'strategy')) sc = S.scripts.find(s => s.enabled && s.kind === 'strategy');
+  const r = sc && S.results.get(sc.id);
+  if (!sc || !r) { $('#resTitle').textContent = 'バックテスト'; box.innerHTML = '<div class="empty"><b>戦略がありません</b><br>スクリプトの1行目を <code>strategy("名前", overlay=true)</code> にして、<code>strategy.entry</code> で売買条件を書くと、ここに成績が出ます。<br><br>「インジ」タブの「移動平均クロス戦略」から試せます。</div>'; return; }
+  $('#resTitle').textContent = sc.name;
+  if (!r.ok) { box.innerHTML = `<div class="msg err" style="margin:0">${esc(r.err.msg)}</div>`; return; }
+  const b = r.out.broker, st = stats(b), q = ds.quote || '';
+  const cls = v => v >= 0 ? 'up' : 'down';
+  const first = fmtT(0).split(' ')[0], last = fmtT(S.D.n - 1).split(' ')[0];
+  let h = `<div class="rhead"><span>${esc(ds.label)} · ${tfLabel(S.tf)} · ${first}〜${last}</span>
+    <label class="sp" for="spread">スプレッド <span class="num" style="height:30px"><input id="spread" type="number" inputmode="decimal" step="0.1" min="0" value="${S.spread}" style="width:56px;height:30px;font-size:16px"></span> pips</label></div>
+  <div class="stats">
+    <div class="stat"><div class="k">純損益（${q}）</div><div class="v ${cls(st.net)}">${fmtMoney(st.net, q)}</div><div class="s">${st.ret >= 0 ? '+' : ''}${st.ret.toFixed(2)}%</div></div>
+    <div class="stat"><div class="k">獲得pips</div><div class="v ${cls(st.pips)}">${st.pips >= 0 ? '+' : ''}${st.pips.toFixed(1)}</div><div class="s">平均 ${fmtNum(st.avg, 1)}</div></div>
+    <div class="stat"><div class="k">勝率</div><div class="v">${fmtNum(st.win, 1)}%</div><div class="s">${st.n}回</div></div>
+    <div class="stat"><div class="k">PF</div><div class="v">${st.pf === Infinity ? '∞' : fmtNum(st.pf, 2)}</div><div class="s">総利益÷総損失</div></div>
+    <div class="stat"><div class="k">最大DD</div><div class="v down">${Math.round(st.mdd).toLocaleString('ja-JP')}</div><div class="s">${st.mddp.toFixed(2)}%</div></div>
+    <div class="stat"><div class="k">初期資金</div><div class="v">${b.cap.toLocaleString('ja-JP')}</div><div class="s">数量 ${b.qtyType === 'fixed' ? b.qtyVal.toLocaleString('ja-JP') + (/^XA[UG]/.test(ds.name) ? 'オンス' : '通貨') : b.qtyVal + (b.qtyType === 'percent' ? '%' : '')}</div></div>
+  </div>
+  <div class="eqbox"><canvas id="eq" height="120"></canvas><div class="eqcap"><span>資産の推移</span><span>${Math.round(b.eq[S.D.n - 1] || b.cap).toLocaleString('ja-JP')} ${q}</span></div></div>`;
+  h += '<div class="trades">';
+  if (st.open) h += `<div class="tr"><span class="no">保有</span><span class="when"><span class="dir ${st.open.dir > 0 ? 'l' : 's'}">${st.open.dir > 0 ? '買い' : '売り'}</span>${fmtT(st.open.eb)} 〜</span><span class="pl ${cls(st.open.unreal)}">${fmtMoney(st.open.unreal, q)}</span><span class="px2">${st.open.ep.toFixed(ds.digits)} → 未決済</span><span class="pp">含み損益</span></div>`;
+  const T = b.trades;
+  for (let k = T.length - 1; k >= Math.max(0, T.length - 300); k--) {
+    const t = T[k];
+    h += `<div class="tr"><span class="no">#${k + 1}</span><span class="when"><span class="dir ${t.dir > 0 ? 'l' : 's'}">${t.dir > 0 ? '買い' : '売り'}</span>${fmtT(t.eb)} → ${fmtT(t.xb)}</span><span class="pl ${cls(t.pnl)}">${fmtMoney(t.pnl, q)}</span>
+      <span class="px2">${t.ep.toFixed(ds.digits)} → ${t.xp.toFixed(ds.digits)}<span class="why">${esc(t.reason || '')}</span></span><span class="pp">${t.pips >= 0 ? '+' : ''}${t.pips.toFixed(1)} pips</span></div>`;
+  }
+  if (!T.length && !st.open) h += '<div class="empty">この期間には取引がありませんでした。</div>';
+  h += '</div>';
+  box.innerHTML = h;
+  drawEquity(b);
+}
+function drawEquity(b) {
+  const cv = $('#eq'); if (!cv) return;
+  const w = cv.clientWidth || 300, hh = 120, dpr = window.devicePixelRatio || 1;
+  cv.width = w * dpr; cv.height = hh * dpr; const g = cv.getContext('2d'); g.scale(dpr, dpr);
+  const pts = []; for (let i = 0; i < b.eq.length; i++) if (b.eq[i] === b.eq[i]) pts.push([i, b.eq[i]]);
+  if (pts.length < 2) return;
+  let lo = Math.min(b.cap, ...pts.map(p => p[1])), hi = Math.max(b.cap, ...pts.map(p => p[1])); if (hi === lo) hi = lo + 1;
+  const pad = 6, X = i => pad + (i - pts[0][0]) / (pts[pts.length - 1][0] - pts[0][0]) * (w - pad * 2), Y = v => pad + (1 - (v - lo) / (hi - lo)) * (hh - pad * 2);
+  g.strokeStyle = tok('--line'); g.setLineDash([3, 3]); g.beginPath(); g.moveTo(0, Y(b.cap)); g.lineTo(w, Y(b.cap)); g.stroke(); g.setLineDash([]);
+  const step = Math.max(1, Math.floor(pts.length / (w * 1.5)));
+  g.beginPath(); pts.forEach((p, k) => { if (k % step && k !== pts.length - 1) return; const x = X(p[0]), y = Y(p[1]); k ? g.lineTo(x, y) : g.moveTo(x, y); });
+  const endUp = pts[pts.length - 1][1] >= b.cap, col = endUp ? tok('--up') : tok('--down');
+  g.strokeStyle = col; g.lineWidth = 1.6; g.stroke();
+  g.lineTo(X(pts[pts.length - 1][0]), Y(b.cap)); g.lineTo(X(pts[0][0]), Y(b.cap)); g.closePath();
+  g.fillStyle = withAlpha(col.startsWith('#') ? col : col, 0.12); g.fill();
+  const lx = X(pts[pts.length - 1][0]), ly = Y(pts[pts.length - 1][1]); g.fillStyle = col; g.beginPath(); g.arc(lx, ly, 3, 0, 7); g.fill();
+}
+
+function renderData() {
+  $('#dlist').innerHTML = S.datasets.map(d => {
+    const B = d.bars; const n = B ? B.t.length : 0;
+    const f = B ? new Date((B.t[0] + JST) * 1000).toISOString().slice(0, 10) : '', l = B ? new Date((B.t[n - 1] + JST) * 1000).toISOString().slice(0, 10) : '';
+    return `<div class="drow ${d.id === S.dsId ? 'on' : ''}" data-ds="${esc(d.id)}" role="button" tabindex="0"><span class="radio"></span>
+      <span><span class="n">${esc(d.label)}</span> ${d.sample ? '<span class="tag">サンプル（架空）</span>' : ''}<br><span class="m">${B ? `${n.toLocaleString()}本 · ${tfLabel(d.baseSec)}足 · ${f}〜${l}` : `${tfLabel(d.baseSec)}足 · 選ぶと生成します`}</span></span>
+      ${d.sample ? '<span></span>' : `<button class="btn danger sm" data-del-ds="${esc(d.id)}">削除</button>`}</div>`;
+  }).join('');
+  $('#tzSel').value = String(S.tz);
+}
+let toastT;
+function toast(m) { document.querySelector('.toast')?.remove(); const t = document.createElement('div'); t.className = 'toast'; t.textContent = m; document.body.appendChild(t); clearTimeout(toastT); toastT = setTimeout(() => t.remove(), 2800); }
+
+// two-tap confirm for destructive buttons
+function armed(btn, label, fn) {
+  if (btn.classList.contains('armed')) { btn.classList.remove('armed'); fn(); return; }
+  const orig = btn.textContent; btn.classList.add('armed'); btn.textContent = label;
+  setTimeout(() => { if (btn.isConnected) { btn.classList.remove('armed'); btn.textContent = orig; } }, 3000);
+}
+
+// ================= events =================
+function bind() {
+  $('#tabbar').addEventListener('click', e => { const b = e.target.closest('.tab'); if (b) setTab(b.dataset.tab, true); });
+  document.addEventListener('click', e => { const b = e.target.closest('[data-size]'); if (b) { S.panel = S.panel === 'full' ? 'half' : 'full'; setTab(S.tab); } });
+  $('#pairSel').addEventListener('change', e => { S.dsId = e.target.value; refresh({ resetRange: true }); });
+  $('#tfs').addEventListener('click', e => { const b = e.target.closest('.tf'); if (!b) return; S.tf = +b.dataset.tf; refresh({ resetRange: true }); });
+
+  $('#slist').addEventListener('click', e => {
+    const row = e.target.closest('.srow'); if (!row) return; const sc = S.scripts.find(s => s.id === row.dataset.id);
+    if (e.target.closest('.sw')) { sc.enabled = !sc.enabled; refresh(); return; }
+    if (e.target.closest('.sname')) { S.selId = sc.id; S.ranMsg = null; refresh(); setTab('ed'); }
+  });
+  $('#chips').addEventListener('click', e => {
+    const b = e.target.closest('[data-new]'); if (!b) return;
+    const code = b.dataset.new === 'blank' ? NEW_TEMPLATE : PRESETS[+b.dataset.new].code;
+    const sc = { id: uid(), code, enabled: true, inputs: {} }; S.scripts.push(sc); S.selId = sc.id; S.ranMsg = null;
+    refresh(); setTab(b.dataset.new === 'blank' ? 'ed' : 'ind'); toast('追加しました');
+  });
+
+  const ta = $('#code');
+  let saveT;
+  ta.addEventListener('input', () => { gutter(); clearTimeout(saveT); saveT = setTimeout(() => { const m = $('#edMsg'); if (sel() && ta.value !== sel().code && !m.querySelector('.warn[data-d]')) m.insertAdjacentHTML('beforeend', '<div class="msg warn" data-d>未実行の変更があります</div>'); try { localStorage.setItem('pinefx.draft.' + S.selId, ta.value); } catch (e) {} }, 400); });
+  ta.addEventListener('scroll', () => { $('#gutter').scrollTop = ta.scrollTop; });
+  ta.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); runEditor(); return; }
+    if (e.key === 'Tab') { e.preventDefault(); insertText('    '); return; }
+    if (e.key === 'Enter' && !e.isComposing) {
+      const v = ta.value, p = ta.selectionStart; const ls = v.lastIndexOf('\n', p - 1) + 1; const line = v.slice(ls, p);
+      let ind = line.match(/^ */)[0];
+      if (/=>\s*$/.test(line) || /^\s*(if|else|for|while)\b/.test(line)) ind += '    ';
+      e.preventDefault(); insertText('\n' + ind);
+    }
+  });
+  $('#keybar').innerHTML = KEYS.map(([l, v], i) => `<button class="key" data-key="${i}" aria-label="${esc(l)}を入力">${esc(l)}</button>`).join('');
+  $('#keybar').addEventListener('pointerdown', e => { const b = e.target.closest('.key'); if (b) { e.preventDefault(); insertText(KEYS[+b.dataset.key][1]); } });
+  $('#runBtn').addEventListener('click', runEditor);
+  $('#edMsg').addEventListener('click', e => { const b = e.target.closest('[data-goto]'); if (b) gotoLine(+b.dataset.goto); });
+  $('#delBtn').addEventListener('click', e => armed(e.currentTarget, '本当に削除？', () => {
+    S.scripts = S.scripts.filter(s => s.id !== S.selId); S.selId = S.scripts[0] && S.scripts[0].id; S.edFor = null; refresh(); setTab('ind'); toast('削除しました');
+  }));
+  $('#refList').innerHTML = Object.entries(PINE.FUNCS).map(([k, v]) => `<dt>${k}</dt><dd>${v.join('  ')}</dd>`).join('') + '<dt>時刻</dt><dd>hour / minute / dayofweek などは日本時間</dd>';
+
+  $('#form').addEventListener('click', e => {
+    const st = e.target.closest('[data-step]');
+    if (st) { const i = +st.dataset.k; const inp = $('#in_' + i); const step = parseFloat(inp.step) || 1; let v = (parseFloat(inp.value) || 0) + step * +st.dataset.step; v = +v.toFixed(6); if (inp.min !== '' && v < +inp.min) v = +inp.min; if (inp.max !== '' && v > +inp.max) v = +inp.max; inp.value = v; setInput(i, v); return; }
+    const sw = e.target.closest('.sw'); if (sw) { const v = sw.getAttribute('aria-checked') !== 'true'; sw.setAttribute('aria-checked', String(v)); setInput(+sw.dataset.k, v, true); }
+  });
+  $('#form').addEventListener('change', e => {
+    const t = e.target; if (t.dataset.k === undefined) return;
+    if (t.type === 'number') { const v = parseFloat(t.value); if (v === v) setInput(+t.dataset.k, v, true); }
+    else setInput(+t.dataset.k, t.value, true);
+  });
+  $('#resetInputs').addEventListener('click', () => { const sc = sel(); if (sc) { sc.inputs = {}; refresh(); toast('初期値に戻しました'); } });
+  $('#resBody').addEventListener('change', e => { if (e.target.id === 'spread') { const v = parseFloat(e.target.value); S.spread = v >= 0 ? v : 0; refresh(); } });
+
+  $('#dlist').addEventListener('click', e => {
+    const del = e.target.closest('[data-del-ds]');
+    if (del) { e.stopPropagation(); armed(del, '本当に削除？', () => { const id = del.dataset.delDs; S.datasets = S.datasets.filter(d => d.id !== id); for (const k of [...cache.keys()]) if (k.startsWith(id + '|')) cache.delete(k); if (S.dsId === id) S.dsId = S.datasets[0].id; persistData(); refresh({ resetRange: true }); }); return; }
+    const row = e.target.closest('[data-ds]'); if (row) { S.dsId = row.dataset.ds; refresh({ resetRange: true }); }
+  });
+  $('#tzSel').addEventListener('change', e => { S.tz = +e.target.value; persist(); });
+  $('#csvFile').addEventListener('change', async e => {
+    const f = e.target.files[0]; if (!f) return; e.target.value = '';
+    try {
+      const text = await f.text(); const p = parseCSV(text, S.tz);
+      if (p.bars.t.length < 30) { toast('読み込めるローソク足が見つかりませんでした（' + p.bars.t.length + '本）。形式を確認してください。'); return; }
+      const m = /([A-Za-z]{3})[\/_\-]?([A-Za-z]{3})/.exec(f.name.replace(/\.[^.]+$/, ''));
+      let name = m ? (m[1] + m[2]).toUpperCase() : f.name.replace(/\.[^.]+$/, '').slice(0, 16);
+      const pm = pairMeta(name); const px = p.bars.c[p.bars.c.length - 1];
+      const pip = /^XA[UG]/.test(name) ? 0.1 : px > 20 ? 0.01 : 0.0001;
+      let id = name + '·' + tfLabel(p.baseSec); let k = 2; while (S.datasets.find(d => d.id === id)) id = name + '·' + tfLabel(p.baseSec) + ' (' + k++ + ')';
+      const ds = { id, name, ...pm, label: pm.label + '（' + tfLabel(p.baseSec) + '）', digits: Math.max(p.digits, px > 20 ? 3 : 5), pip, mintick: pip / 10, baseSec: p.baseSec || 3600, bars: p.bars, sample: false };
+      S.datasets.push(ds); S.dsId = id; S.tf = ds.baseSec;
+      const ok = persistData();
+      refresh({ resetRange: true });
+      toast(`${p.bars.t.length.toLocaleString()}本を読み込みました` + (ok ? '' : '（大きすぎるため端末には保存されません）'));
+    } catch (err) { console.error(err); toast('読み込みに失敗しました：' + err.message); }
+  });
+
+  new ResizeObserver(() => { layoutCharts(); const r = S.results.get(sel()?.id); if ($('#eq') && r && r.ok && r.out.broker) drawEquity(r.out.broker); }).observe($('#chartHost'));
+  const re = () => refresh();
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', re);
+  new MutationObserver(re).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+}
+
+restore();
+bind();
+setTab(S.tab);
+refresh();
+// restore unsaved draft for the selected script
+try { const d = localStorage.getItem('pinefx.draft.' + S.selId); if (d && sel() && d !== sel().code) { $('#code').value = d; renderEditor(); } } catch (e) {}
+</script>
+
+</body></html>
