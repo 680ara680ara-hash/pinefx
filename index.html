@@ -2144,11 +2144,11 @@ function bind() {
   $('#tzSel').addEventListener('change', e => { S.tz = +e.target.value; persist(); });
   $('#saveKey').addEventListener('click', () => {
     const k = $('#apiKey').value.trim(); if (k.length < 10) { toast('APIキーを貼り付けてください'); return; }
-    L.key = k; L.err = null; try { localStorage.setItem(TKEY, k); } catch (e) {}
+    L.key = k; L.err = null; try { localStorage.setItem(TKEY, k); localStorage.removeItem('pinefx.nobuiltin'); } catch (e) {}
     $('#apiKey').value = ''; addLiveSets(); S.dsId = 'live:USDJPY'; S.tf = 60; startPolling(); refresh({ resetRange: true }); toast('接続しました');
   });
   $('#delKey').addEventListener('click', e => armed(e.currentTarget, '本当に削除？', () => {
-    L.key = ''; try { localStorage.removeItem(TKEY); } catch (e) {} startPolling(); removeLiveSets(); refresh({ resetRange: true }); toast('キーを削除しました');
+    L.key = ''; try { localStorage.removeItem(TKEY); localStorage.setItem('pinefx.nobuiltin', '1'); } catch (e) {} startPolling(); removeLiveSets(); refresh({ resetRange: true }); toast('キーを削除しました');
   }));
   $('#everySel').addEventListener('change', e => { L.every = +e.target.value; try { localStorage.setItem(LKEY, String(L.every)); } catch (x) {} startPolling(); renderData(); });
   $('#chartHost').addEventListener('click', e => { if (e.target.id === 'retryLive') { L.err = null; refresh(); } });
@@ -2177,9 +2177,13 @@ function bind() {
   new MutationObserver(re).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 }
 
+const BUILTIN_KEY = '168cf70f43f24a2a86c937e629ed1ba2'; // 組み込みのTwelve Data APIキー
+let firstLive = false;
 try { L.key = localStorage.getItem(TKEY) || ''; L.every = +(localStorage.getItem(LKEY) || 60); } catch (e) {}
+if (!L.key && BUILTIN_KEY && !localStorage.getItem('pinefx.nobuiltin')) { L.key = BUILTIN_KEY; firstLive = true; try { localStorage.setItem(TKEY, L.key); } catch (e) {} }
 if (L.key) addLiveSets();
 restore();
+if (firstLive) { S.dsId = 'live:USDJPY'; S.tf = 60; }
 bind();
 startPolling();
 setTab(S.tab);
